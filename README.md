@@ -1,4 +1,4 @@
-# PKU 树洞 RAG Agent
+# PKU Treehole Search Agent
 
 基于北大树洞的检索增强智能问答系统，支持选课咨询、课程测评分析等功能。
 
@@ -7,7 +7,8 @@
 ### 一键启动（推荐）
 
 ```bash
-cd ~/pku-treehole-rag-agent
+git clone git@github.com:SunVapor/pku-treehole-search-agent.git
+cd ./pku-treehole-search-agent
 bash start.sh
 ```
 
