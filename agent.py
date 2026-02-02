@@ -1,0 +1,642 @@
+"""
+PKU Treehole RAG Agent
+
+Main agent class implementing two retrieval modes:
+1. Manual keyword search: User provides keywords directly
+2. Auto keyword extraction: LLM extracts keywords from user query
+"""
+
+import json
+import os
+import time
+from typing import List, Dict, Any, Optional
+
+import requests
+
+from client import TreeholeClient
+from utils import (
+    format_posts_batch,
+    save_json,
+    load_json,
+    get_cache_key,
+    is_cache_valid,
+    smart_truncate_posts,
+    print_header,
+    print_separator,
+)
+
+# Agent debug message prefix
+AGENT_PREFIX = "[Agent] "
+
+try:
+    from config_private import (
+        USERNAME,
+        PASSWORD,
+        DEEPSEEK_API_KEY,
+        DEEPSEEK_API_BASE,
+        DEEPSEEK_MODEL,
+        MAX_SEARCH_RESULTS,
+        MAX_CONTEXT_POSTS,
+        TEMPERATURE,
+        MAX_RESPONSE_TOKENS,
+        SEARCH_DELAY,
+        ENABLE_CACHE,
+        CACHE_DIR,
+        CACHE_EXPIRATION,
+    )
+except ImportError:
+    from config import (
+        USERNAME,
+        PASSWORD,
+        DEEPSEEK_API_KEY,
+        DEEPSEEK_API_BASE,
+        DEEPSEEK_MODEL,
+        MAX_SEARCH_RESULTS,
+        MAX_CONTEXT_POSTS,
+        TEMPERATURE,
+        MAX_RESPONSE_TOKENS,
+        SEARCH_DELAY,
+        ENABLE_CACHE,
+        CACHE_DIR,
+        CACHE_EXPIRATION,
+    )
+
+
+class TreeholeRAGAgent:
+    """
+    RAG Agent for PKU Treehole with DeepSeek integration.
+    Supports manual and automatic keyword-based retrieval.
+    """
+
+    def __init__(self):
+        """Initialize the agent with Treehole client and DeepSeek API."""
+        self.client = TreeholeClient()
+        self.api_key = DEEPSEEK_API_KEY
+        self.api_base = DEEPSEEK_API_BASE
+        self.model = DEEPSEEK_MODEL
+        
+        # Ensure login
+        if not self.client.ensure_login(USERNAME, PASSWORD):
+            raise RuntimeError("Failed to login to Treehole")
+        
+        # Create cache directory
+        if ENABLE_CACHE:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+        
+        print(f"{AGENT_PREFIX}✓ 树洞 RAG Agent 初始化成功")
+
+    def search_treehole(
+        self, 
+        keyword: str, 
+        max_results: int = MAX_SEARCH_RESULTS,
+        use_cache: bool = ENABLE_CACHE
+    ) -> List[Dict[str, Any]]:
+        """
+        Search Treehole for posts matching keyword.
+        
+        Args:
+            keyword (str): Search keyword.
+            max_results (int): Maximum number of results to return.
+            use_cache (bool): Whether to use cached results.
+            
+        Returns:
+            list: List of post dictionaries.
+        """
+        # Check cache first
+        if use_cache:
+            cache_key = get_cache_key(keyword)
+            cache_file = os.path.join(CACHE_DIR, f"{cache_key}.json")
+            
+            if is_cache_valid(cache_file, CACHE_EXPIRATION):
+                print(f"{AGENT_PREFIX}使用缓存结果: {keyword}")
+                return load_json(cache_file)
+        
+        print(f"{AGENT_PREFIX}正在搜索树洞: {keyword}")
+        
+        # Call search API
+        try:
+            search_result = self.client.search_posts(
+                keyword, 
+                limit=max_results,
+                comment_limit=10  # Get up to 10 comments per post from the search API
+            )
+            
+            if search_result.get("success"):
+                posts = search_result["data"]["data"]
+                
+                # The search API already includes comments in comment_list
+                # We just need to ensure the format is consistent
+                enriched_posts = []
+                for post in posts[:max_results]:
+                    # Comments are already included from the search API
+                    # If you need ALL comments (not just the preview), uncomment below:
+                    # if post.get("comment_total", 0) > len(post.get("comments", [])):
+                    #     # Fetch all comments if needed
+                    #     try:
+                    #         comments_result = self.client.get_comment(post["pid"])
+                    #         if comments_result.get("success"):
+                    #             post["comments"] = comments_result["data"]["data"]
+                    #     except Exception as e:
+                    #         print(f"Warning: Failed to fetch all comments for post {post.get('pid')}: {e}")
+                    
+                    enriched_posts.append(post)
+                
+                # Cache results
+                if use_cache:
+                    save_json(enriched_posts, cache_file)
+                
+                return enriched_posts
+            else:
+                print(f"{AGENT_PREFIX}搜索失败: {search_result.get('message', '未知错误')}")
+                return []
+                
+        except Exception as e:
+            print(f"{AGENT_PREFIX}搜索树洞时出错: {e}")
+            return []
+
+    def call_deepseek(
+        self, 
+        user_message: str, 
+        system_message: Optional[str] = None,
+        temperature: float = TEMPERATURE,
+        stream: bool = True
+    ) -> str:
+        """
+        Call DeepSeek API for chat completion.
+        
+        Args:
+            user_message (str): User's message.
+            system_message (str): System message (optional).
+            temperature (float): Temperature for generation.
+            stream (bool): Whether to use streaming output.
+            
+        Returns:
+            str: LLM response (accumulated if streaming).
+        """
+        messages = []
+        
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        
+        messages.append({"role": "user", "content": user_message})
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        
+        data = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": MAX_RESPONSE_TOKENS,
+            "stream": stream,
+        }
+        
+        try:
+            if stream:
+                # Streaming response
+                response = requests.post(
+                    f"{self.api_base}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=120,
+                    stream=True,
+                )
+                response.raise_for_status()
+                
+                full_content = ""
+                for line in response.iter_lines():
+                    if line:
+                        line_str = line.decode('utf-8')
+                        if line_str.startswith('data: '):
+                            data_str = line_str[6:]
+                            if data_str.strip() == '[DONE]':
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                                if 'choices' in chunk and len(chunk['choices']) > 0:
+                                    delta = chunk['choices'][0].get('delta', {})
+                                    content = delta.get('content', '')
+                                    if content:
+                                        print(content, end='', flush=True)
+                                        full_content += content
+                            except json.JSONDecodeError:
+                                continue
+                
+                print()  # New line after streaming
+                return full_content
+            else:
+                # Non-streaming response
+                response = requests.post(
+                    f"{self.api_base}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=60,
+                )
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
+            
+        except Exception as e:
+            print(f"{AGENT_PREFIX}调用 DeepSeek API 时出错: {e}")
+            return f"抱歉，调用 DeepSeek API 时出错: {e}"
+
+    def mode_manual_search(self, keyword: str, user_question: str) -> Dict[str, Any]:
+        """
+        Mode 1: Manual keyword search.
+        User provides keyword directly, agent searches and answers.
+        
+        Args:
+            keyword (str): Search keyword provided by user.
+            user_question (str): User's question.
+            
+        Returns:
+            dict: Response containing answer and sources.
+        """
+        print_header("模式 1: 手动关键词检索")
+        
+        # Step 1: Search Treehole
+        posts = self.search_treehole(keyword)
+        
+        if not posts:
+            return {
+                "answer": f"抱歉，没有找到关于「{keyword}」的相关树洞内容。",
+                "keyword": keyword,
+                "sources": [],
+            }
+        
+        print(f"{AGENT_PREFIX}✓ 找到 {len(posts)} 个帖子")
+        
+        # Step 2: Select top posts for context
+        context_posts = smart_truncate_posts(posts[:MAX_CONTEXT_POSTS])
+        print(f"{AGENT_PREFIX}✓ 使用 {len(context_posts)} 个帖子作为上下文")
+        
+        # Step 3: Display retrieved content
+        print_separator("-")
+        print("\n【检索到的内容】\n")
+        for i, post in enumerate(context_posts, 1):
+            print(f"{i}. 帖子 #{post.get('pid')} - {post.get('text', '')[:60]}...")
+            comments = post.get('comments') or post.get('comment_list') or []
+            if comments:
+                print(f"   评论数: {len(comments)}")
+        print_separator("-")
+        
+        # Step 4: Format posts as text
+        context_text = format_posts_batch(context_posts, include_comments=True)
+        
+        # Step 5: Construct prompt
+        system_message = """你是一个北大树洞问答助手。你的任务是根据提供的树洞帖子内容，回答用户的问题。
+
+注意事项：
+1. 只基于提供的树洞内容回答，不要编造信息
+2. 如果树洞内容不足以回答问题，诚实地告知用户
+3. 可以综合多个帖子的观点给出全面的回答
+4. 保持客观，如果有不同观点要都提及
+5. 回答要有条理，适当使用markdown格式"""
+
+        user_message = f"""树洞内容：
+
+{context_text}
+
+---
+
+用户问题：{user_question}
+
+请基于以上树洞内容回答用户的问题。"""
+
+        # Step 6: Call LLM with streaming
+        print("\n【LLM回答】\n")
+        answer = self.call_deepseek(user_message, system_message, stream=True)
+        
+        return {
+            "answer": answer,
+            "keyword": keyword,
+            "sources": [{"pid": p.get("pid"), "text": p.get("text", "")[:100] + "..."} for p in context_posts],
+            "num_sources": len(context_posts),
+        }
+
+    def mode_auto_search(self, user_question: str) -> Dict[str, Any]:
+        """
+        Mode 2: Automatic keyword extraction.
+        LLM extracts keywords from user question, then searches and answers.
+        
+        Args:
+            user_question (str): User's question.
+            
+        Returns:
+            dict: Response containing answer and sources.
+        """
+        print_header("模式 2: 自动关键词提取")
+        
+        # Step 1: Extract keywords using LLM
+        print(f"{AGENT_PREFIX}✓ 正在从问题中提取关键词...")
+        keyword_prompt = f"""请从以下问题中提取最适合在北大树洞搜索的关键词（1-3个词）。
+只返回关键词，用空格分隔，不要有其他解释。
+
+问题：{user_question}
+
+关键词："""
+
+        keywords_str = self.call_deepseek(keyword_prompt, temperature=0.3, stream=False)
+        keywords = keywords_str.strip().split()[:3]  # Take first 3 keywords
+        
+        print(f"{AGENT_PREFIX}✓ 提取的关键词: {keywords}")
+        
+        # Step 2: Search with each keyword and combine results
+        all_posts = []
+        for keyword in keywords:
+            posts = self.search_treehole(keyword, max_results=MAX_SEARCH_RESULTS // len(keywords))
+            all_posts.extend(posts)
+            time.sleep(SEARCH_DELAY)
+        
+        # Deduplicate by pid
+        unique_posts = {post["pid"]: post for post in all_posts}.values()
+        unique_posts = list(unique_posts)
+        
+        print(f"{AGENT_PREFIX}✓ 找到 {len(unique_posts)} 个不重复的帖子")
+        
+        if not unique_posts:
+            return {
+                "answer": f"抱歉，没有找到相关的树洞内容。提取的关键词：{', '.join(keywords)}",
+                "keywords": keywords,
+                "sources": [],
+            }
+        
+        # Step 3: Display retrieved content
+        context_posts = smart_truncate_posts(unique_posts[:MAX_CONTEXT_POSTS])
+        print(f"{AGENT_PREFIX}✓ 使用 {len(context_posts)} 个帖子作为上下文")
+        
+        print_separator("-")
+        print("\n【检索到的内容】\n")
+        for i, post in enumerate(context_posts, 1):
+            print(f"{i}. 帖子 #{post.get('pid')} - {post.get('text', '')[:60]}...")
+            comments = post.get('comments') or post.get('comment_list') or []
+            if comments:
+                print(f"   评论数: {len(comments)}")
+        print_separator("-")
+        
+        context_text = format_posts_batch(context_posts, include_comments=True)
+        
+        system_message = """你是一个北大树洞问答助手。你的任务是根据提供的树洞帖子内容，回答用户的问题。
+
+注意事项：
+1. 只基于提供的树洞内容回答，不要编造信息
+2. 如果树洞内容不足以回答问题，诚实地告知用户
+3. 可以综合多个帖子的观点给出全面的回答
+4. 保持客观，如果有不同观点要都提及
+5. 回答要有条理，适当使用markdown格式"""
+
+        user_message = f"""树洞内容：
+
+{context_text}
+
+---
+
+用户问题：{user_question}
+
+请基于以上树洞内容回答用户的问题。"""
+
+        print("\n【LLM回答】\n")
+        answer = self.call_deepseek(user_message, system_message, stream=True)
+        
+        return {
+            "answer": answer,
+            "keywords": keywords,
+            "sources": [{"pid": p.get("pid"), "text": p.get("text", "")[:100] + "..."} for p in context_posts],
+            "num_sources": len(context_posts),
+        }
+
+    def mode_course_review(self, course_abbr: str, teacher_initials: str) -> Dict[str, Any]:
+        """
+        Mode 3: Course review mode.
+        Searches for course reviews and analyzes comments containing the course name.
+        
+        Args:
+            course_abbr (str): Course abbreviation (e.g., "计网").
+            teacher_initials (str): Teacher's name initials (e.g., "hq").
+            
+        Returns:
+            dict: Response containing comprehensive course analysis.
+        """
+        print_header("模式 3: 课程测评分析")
+        
+        # Step 1: Construct search keyword
+        search_keyword = f"{course_abbr} {teacher_initials} 测评"
+        print(f"{AGENT_PREFIX}搜索关键词: {search_keyword}")
+        
+        # Step 2: Search Treehole
+        posts = self.search_treehole(search_keyword, max_results=MAX_SEARCH_RESULTS)
+        
+        if not posts:
+            return {
+                "answer": f"抱歉，没有找到关于「{course_abbr} {teacher_initials}」课程的测评内容。",
+                "course": course_abbr,
+                "teacher": teacher_initials,
+                "sources": [],
+            }
+        
+        print(f"{AGENT_PREFIX}✓ 找到 {len(posts)} 个帖子")
+        
+        # Step 3: Extract and analyze comments from posts
+        print(f"{AGENT_PREFIX}✓ 正在从评论中提取课程测评...")
+        course_reviews = []
+        
+        for post in posts:
+            pid = post.get("pid")
+            post_text = post.get("text", "")
+            
+            # Check if post itself mentions the course
+            if course_abbr in post_text:
+                course_reviews.append({
+                    "pid": pid,
+                    "type": "post",
+                    "text": post_text,
+                    "is_lz": True
+                })
+            
+            # Get ALL comments for this post
+            try:
+                comment_total = post.get("comment_total", 0)
+                existing_comments = post.get("comments") or post.get("comment_list") or []
+                
+                # If we need more comments, fetch them
+                if comment_total > len(existing_comments):
+                    print(f"{AGENT_PREFIX}  正在获取帖子 #{pid} 的全部 {comment_total} 条评论...")
+                    comments_result = self.client.get_comment(pid, limit=100)  # Get more per page
+                    
+                    if comments_result.get("success"):
+                        all_comments = comments_result["data"]["data"]
+                        
+                        # Fetch additional pages if needed
+                        last_page = comments_result["data"].get("last_page", 1)
+                        for page in range(2, last_page + 1):
+                            page_result = self.client.get_comment(pid, page=page, limit=100)
+                            if page_result.get("success"):
+                                all_comments.extend(page_result["data"]["data"])
+                        
+                        post["comments"] = all_comments
+                    else:
+                        post["comments"] = existing_comments
+                else:
+                    post["comments"] = existing_comments
+                
+                # Filter comments containing course name
+                for comment in post.get("comments", []):
+                    comment_text = comment.get("text", "")
+                    is_lz = comment.get("is_lz", 0) == 1
+                    
+                    # Prioritize 洞主's comments or those mentioning the course
+                    if course_abbr in comment_text or is_lz:
+                        course_reviews.append({
+                            "pid": pid,
+                            "type": "comment",
+                            "text": comment_text,
+                            "is_lz": is_lz,
+                            "name_tag": comment.get("name_tag", "Anonymous")
+                        })
+                
+                time.sleep(0.1)  # Small delay between requests
+                
+            except Exception as e:
+                print(f"{AGENT_PREFIX}  警告: 获取帖子 {pid} 的评论失败: {e}")
+                continue
+        
+        if not course_reviews:
+            return {
+                "answer": f"找到了 {len(posts)} 个帖子，但没有发现包含「{course_abbr}」的详细测评内容。",
+                "course": course_abbr,
+                "teacher": teacher_initials,
+                "sources": [{"pid": p.get("pid")} for p in posts[:5]],
+            }
+        
+        print(f"{AGENT_PREFIX}✓ 提取到 {len(course_reviews)} 条与课程相关的测评")
+        
+        # Step 4: Display retrieved reviews
+        print_separator("-")
+        print(f"\n【找到 {len(course_reviews)} 条课程测评】\n")
+        
+        # Show a preview
+        for i, review in enumerate(course_reviews[:10], 1):
+            lz_mark = "[洞主]" if review.get("is_lz") else ""
+            text_preview = review["text"][:80].replace("\n", " ")
+            print(f"{i}. {lz_mark} {review['type']} #{review['pid']}: {text_preview}...")
+        
+        if len(course_reviews) > 10:
+            print(f"... 还有 {len(course_reviews) - 10} 条评论")
+        
+        print_separator("-")
+        
+        # Step 5: Format reviews for LLM
+        reviews_text = ""
+        for i, review in enumerate(course_reviews, 1):
+            lz_mark = "[洞主]" if review.get("is_lz") else ""
+            reviews_text += f"\n--- 评论 {i} {lz_mark} (帖子#{review['pid']}) ---\n"
+            reviews_text += review["text"] + "\n"
+        
+        # Step 6: Construct analysis prompt
+        system_message = f"""你是一个专业的课程评价分析助手。你的任务是仔细分析北大树洞中关于「{course_abbr}」课程（{teacher_initials}老师）的所有测评，综合多方观点，给出全面的分析。
+
+分析要求：
+1. **课程难度**: 综合评估课程的难度水平，包括作业量、考试难度等
+2. **教学质量**: 分析老师的授课方式、讲课清晰度、课堂互动等
+3. **课程内容**: 评价课程内容的实用性、前沿性、趣味性等
+4. **考核方式**: 总结作业、项目、考试等考核方式及其特点
+5. **选课建议**: 基于不同学生需求（兴趣/学分/能力等），给出针对性建议
+6. **注意事项**: 提醒需要注意的先修知识、时间投入等
+
+要点：
+- 客观呈现不同观点，包括正面和负面评价
+- 如果评价有分歧，要明确指出并分析原因
+- 用markdown格式组织答案，使用标题、列表等
+- 引用具体评论时要注明
+"""
+
+        user_message = f"""以下是从北大树洞收集到的关于「{course_abbr}」课程（{teacher_initials}老师）的所有测评内容：
+
+{reviews_text}
+
+---
+
+请仔细分析以上所有测评，从课程难度、教学质量、课程内容、考核方式、选课建议等多个维度，给出全面、客观的分析和建议。"""
+
+        # Step 7: Call LLM with streaming
+        print(f"\n【课程「{course_abbr}」({teacher_initials}老师) 综合分析】\n")
+        answer = self.call_deepseek(user_message, system_message, stream=True)
+        
+        return {
+            "answer": answer,
+            "course": course_abbr,
+            "teacher": teacher_initials,
+            "sources": [{"pid": r["pid"], "text": r["text"][:100] + "..."} for r in course_reviews[:10]],
+            "num_sources": len(course_reviews),
+        }
+
+    def interactive_mode(self):
+        """
+        Interactive mode for testing the agent.
+        """
+        print_header("PKU Treehole RAG Agent - Interactive Mode")
+        
+        while True:
+            print("\n选择模式:")
+            print("  1 - 手动输入关键词检索")
+            print("  2 - LLM自动生成关键词检索")
+            print("  3 - LLM自动课程测评分析")
+            print("  q - 退出\n")
+            mode = input("请选择模式 (1/2/3/q): ").strip()
+            
+            if mode == 'q':
+                print(f"{AGENT_PREFIX}正在退出...")
+                break
+            
+            if mode not in ['1', '2', '3']:
+                print(f"{AGENT_PREFIX}无效选择，请重试")
+                continue
+            
+            if mode == '3':
+                # Course review mode
+                course_abbr = input("\n请输入课程缩写（如：计网、操统）: ").strip()
+                if not course_abbr:
+                    print(f"{AGENT_PREFIX}课程缩写不能为空")
+                    continue
+                
+                teacher_initials = input("请输入老师姓名首字母（如：zhx）: ").strip()
+                if not teacher_initials:
+                    print(f"{AGENT_PREFIX}老师姓名首字母不能为空")
+                    continue
+                
+                result = self.mode_course_review(course_abbr, teacher_initials)
+            else:
+                # Original modes
+                user_question = input("\n请输入你的问题: ").strip()
+                
+                if not user_question:
+                    print(f"{AGENT_PREFIX}问题不能为空")
+                    continue
+                
+                if mode == '1':
+                    keyword = input("请输入搜索关键词: ").strip()
+                    if not keyword:
+                        print(f"{AGENT_PREFIX}关键词不能为空")
+                        continue
+                    result = self.mode_manual_search(keyword, user_question)
+                else:
+                    result = self.mode_auto_search(user_question)
+
+
+def main():
+    """Main entry point."""
+    try:
+        agent = TreeholeRAGAgent()
+        agent.interactive_mode()
+    except KeyboardInterrupt:
+        print("\n\n[Agent] 程序被用户中断")
+    except Exception as e:
+        print(f"\n[Agent] 错误: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+if __name__ == "__main__":
+    main()
