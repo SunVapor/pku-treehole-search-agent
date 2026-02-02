@@ -1,20 +1,36 @@
 # PKU 树洞 RAG Agent
 
-基于北大树洞的检索增强智能问答系统，支持选课咨询、课程测评分析等功能。
+基于北大树洞的 RAG（检索增强生成）智能问答系统，支持选课咨询、课程测评分析等功能。
+
+**🆕 新功能：邮件机器人** - 通过邮件远程查询，随时随地获取课程信息！
 
 ## ⚡ 快速开始
 
-### 一键启动（推荐）
+### 方式 1: 命令行交互
 
 ```bash
-cd ~/pku-treehole-rag-agent
+cd ~/pku-treehole-search-agent
 bash start.sh
 ```
 
-脚本会自动：
-1. 检查 Python 环境
-2. 安装依赖
-3. 引导你创建配置文件（输入学号、密码、API Key）
+### 方式 2: 邮件机器人 🆕
+
+通过邮件远程查询，无需登录服务器！
+
+```bash
+# 1. 配置邮箱（复制模板并编辑）
+cp email_config_template.py email_config.py
+
+# 2. 启动邮件机器人
+bash start_email_bot.sh
+
+# 或部署为系统服务（开机自启）
+sudo bash deploy_service.sh
+```
+
+发送邮件到配置的邮箱，主题以 `[树洞]` 开头即可自动回复！
+
+详见 [EMAIL_BOT_GUIDE.md](EMAIL_BOT_GUIDE.md)
 
 ### 手动配置
 

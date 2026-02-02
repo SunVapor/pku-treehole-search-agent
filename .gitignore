@@ -5,6 +5,7 @@ __pycache__/
 
 # Private configuration
 config_private.py
+email_config.py
 
 # Cookies
 cookies.json
@@ -14,6 +15,9 @@ data/
 *.json
 !examples/*.json
 !requirements.txt
+
+# Logs
+logs/
 
 # Virtual environment
 venv/
