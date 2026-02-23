@@ -37,6 +37,7 @@ try:
         DEEPSEEK_MODEL,
         MAX_SEARCH_RESULTS,
         MAX_CONTEXT_POSTS,
+        MAX_COMMENTS_PER_POST,
         TEMPERATURE,
         MAX_RESPONSE_TOKENS,
         SEARCH_DELAY,
@@ -53,6 +54,7 @@ except ImportError:
         DEEPSEEK_MODEL,
         MAX_SEARCH_RESULTS,
         MAX_CONTEXT_POSTS,
+        MAX_COMMENTS_PER_POST,
         TEMPERATURE,
         MAX_RESPONSE_TOKENS,
         SEARCH_DELAY,
@@ -274,7 +276,7 @@ class TreeholeRAGAgent:
         print(f"{AGENT_PREFIX}✓ 找到 {len(posts)} 个帖子")
         
         # Step 2: Select top posts for context
-        context_posts = smart_truncate_posts(posts[:MAX_CONTEXT_POSTS])
+        context_posts = smart_truncate_posts(posts[:MAX_CONTEXT_POSTS], max_comments=MAX_COMMENTS_PER_POST)
         print(f"{AGENT_PREFIX}✓ 使用 {len(context_posts)} 个帖子作为上下文")
         
         # Step 3: Display retrieved content
@@ -284,11 +286,12 @@ class TreeholeRAGAgent:
             print(f"{i}. 帖子 #{post.get('pid')} - {post.get('text', '')[:60]}...")
             comments = post.get('comments') or post.get('comment_list') or []
             if comments:
-                print(f"   评论数: {len(comments)}")
+                comment_info = f"前{MAX_COMMENTS_PER_POST}条" if MAX_COMMENTS_PER_POST > 0 else "全部"
+                print(f"   评论数: {len(comments)} ({comment_info})")
         print_separator("-")
         
         # Step 4: Format posts as text
-        context_text = format_posts_batch(context_posts, include_comments=True)
+        context_text = format_posts_batch(context_posts, include_comments=True, max_comments=MAX_COMMENTS_PER_POST)
         
         # Step 5: Construct prompt
         system_message = """你是一个北大树洞问答助手。你的任务是根据提供的树洞帖子内容，回答用户的问题。
@@ -369,7 +372,7 @@ class TreeholeRAGAgent:
             }
         
         # Step 3: Display retrieved content
-        context_posts = smart_truncate_posts(unique_posts[:MAX_CONTEXT_POSTS])
+        context_posts = smart_truncate_posts(unique_posts[:MAX_CONTEXT_POSTS], max_comments=MAX_COMMENTS_PER_POST)
         print(f"{AGENT_PREFIX}✓ 使用 {len(context_posts)} 个帖子作为上下文")
         
         print_separator("-")
@@ -378,10 +381,11 @@ class TreeholeRAGAgent:
             print(f"{i}. 帖子 #{post.get('pid')} - {post.get('text', '')[:60]}...")
             comments = post.get('comments') or post.get('comment_list') or []
             if comments:
-                print(f"   评论数: {len(comments)}")
+                comment_info = f"前{MAX_COMMENTS_PER_POST}条" if MAX_COMMENTS_PER_POST > 0 else "全部"
+                print(f"   评论数: {len(comments)} ({comment_info})")
         print_separator("-")
         
-        context_text = format_posts_batch(context_posts, include_comments=True)
+        context_text = format_posts_batch(context_posts, include_comments=True, max_comments=MAX_COMMENTS_PER_POST)
         
         system_message = """你是一个北大树洞问答助手。你的任务是根据提供的树洞帖子内容，回答用户的问题。
 

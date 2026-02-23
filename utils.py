@@ -9,13 +9,14 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 
-def format_post_to_text(post: Dict[str, Any], include_comments: bool = True) -> str:
+def format_post_to_text(post: Dict[str, Any], include_comments: bool = True, max_comments: int = 5) -> str:
     """
     Convert a post JSON to readable text format.
     
     Args:
         post (dict): Post data from Treehole API.
         include_comments (bool): Whether to include comments.
+        max_comments (int): Maximum number of comments to include. -1 for unlimited.
         
     Returns:
         str: Formatted text representation of the post.
@@ -49,7 +50,9 @@ def format_post_to_text(post: Dict[str, Any], include_comments: bool = True) -> 
         comments = post.get("comments") or post.get("comment_list") or []
         if comments:
             lines.append("\n--- 评论 ---")
-            for i, comment in enumerate(comments[:5], 1):  # Limit to 5 comments
+            # Use max_comments to limit comment count (-1 for unlimited)
+            comment_limit = len(comments) if max_comments == -1 else max_comments
+            for i, comment in enumerate(comments[:comment_limit], 1):
                 comment_text = comment.get("text", "")
                 comment_name = comment.get("name_tag", "Anonymous")
                 lines.append(f"{i}. [{comment_name}] {comment_text}")
@@ -60,20 +63,21 @@ def format_post_to_text(post: Dict[str, Any], include_comments: bool = True) -> 
     return "\n".join(lines)
 
 
-def format_posts_batch(posts: List[Dict[str, Any]], include_comments: bool = False) -> str:
+def format_posts_batch(posts: List[Dict[str, Any]], include_comments: bool = False, max_comments: int = 5) -> str:
     """
     Convert multiple posts to text format.
     
     Args:
         posts (list): List of post dictionaries.
         include_comments (bool): Whether to include comments.
+        max_comments (int): Maximum number of comments to include per post. -1 for unlimited.
         
     Returns:
         str: Formatted text of all posts.
     """
     formatted_posts = []
     for post in posts:
-        formatted_posts.append(format_post_to_text(post, include_comments))
+        formatted_posts.append(format_post_to_text(post, include_comments, max_comments))
     
     return "\n".join(formatted_posts)
 
@@ -202,13 +206,14 @@ def count_tokens_estimate(text: str) -> int:
     return int(chinese_chars / 1.5 + other_chars / 4)
 
 
-def smart_truncate_posts(posts: List[Dict[str, Any]], max_tokens: int = 4000) -> List[Dict[str, Any]]:
+def smart_truncate_posts(posts: List[Dict[str, Any]], max_tokens: int = 4000, max_comments: int = 5) -> List[Dict[str, Any]]:
     """
     Intelligently truncate posts to fit within token limit.
     
     Args:
         posts (list): List of posts.
         max_tokens (int): Maximum token limit.
+        max_comments (int): Maximum number of comments per post for token estimation.
         
     Returns:
         list: Truncated list of posts.
@@ -217,7 +222,8 @@ def smart_truncate_posts(posts: List[Dict[str, Any]], max_tokens: int = 4000) ->
     total_tokens = 0
     
     for post in posts:
-        post_text = format_post_to_text(post, include_comments=False)
+        # Include comments in token estimation for accuracy
+        post_text = format_post_to_text(post, include_comments=True, max_comments=max_comments)
         post_tokens = count_tokens_estimate(post_text)
         
         if total_tokens + post_tokens <= max_tokens:
