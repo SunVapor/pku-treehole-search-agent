@@ -68,16 +68,21 @@ class TreeholeRAGAgent:
     Supports manual and automatic keyword-based retrieval.
     """
 
-    def __init__(self):
-        """Initialize the agent with Treehole client and DeepSeek API."""
+    def __init__(self, interactive=True):
+        """Initialize the agent with Treehole client and DeepSeek API.
+        
+        Args:
+            interactive (bool): Whether to allow interactive prompts for login verification.
+                              Set to False when running as a service.
+        """
         self.client = TreeholeClient()
         self.api_key = DEEPSEEK_API_KEY
         self.api_base = DEEPSEEK_API_BASE
         self.model = DEEPSEEK_MODEL
         
         # Ensure login
-        if not self.client.ensure_login(USERNAME, PASSWORD):
-            raise RuntimeError("Failed to login to Treehole")
+        if not self.client.ensure_login(USERNAME, PASSWORD, interactive=interactive):
+            raise RuntimeError("Failed to login to Treehole. Try running interactively first to save cookies.")
         
         # Create cache directory
         if ENABLE_CACHE:
@@ -293,7 +298,7 @@ class TreeholeRAGAgent:
 2. 如果树洞内容不足以回答问题，诚实地告知用户
 3. 可以综合多个帖子的观点给出全面的回答
 4. 保持客观，如果有不同观点要都提及
-5. 回答要有条理，适当使用markdown格式"""
+5. 回答要有条理，使用markdown格式时只能使用单级列表，不能出现多级列表"""
 
         user_message = f"""树洞内容：
 
@@ -385,7 +390,7 @@ class TreeholeRAGAgent:
 2. 如果树洞内容不足以回答问题，诚实地告知用户
 3. 可以综合多个帖子的观点给出全面的回答
 4. 保持客观，如果有不同观点要都提及
-5. 回答要有条理，适当使用markdown格式"""
+5. 回答要有条理，使用markdown格式时只能使用单级列表，不能出现多级列表"""
 
         user_message = f"""树洞内容：
 
@@ -548,7 +553,7 @@ class TreeholeRAGAgent:
 要点：
 - 客观呈现不同观点，包括正面和负面评价
 - 如果评价有分歧，要明确指出并分析原因
-- 用markdown格式组织答案，使用标题、列表等
+- 使用markdown格式时只能使用单级列表，不能出现多级列表
 - 引用具体评论时要注明
 """
 

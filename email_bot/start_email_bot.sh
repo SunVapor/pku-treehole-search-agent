@@ -2,6 +2,7 @@
 # 邮件机器人启动脚本
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$SCRIPT_DIR"
 
 echo "=========================================="
@@ -22,15 +23,15 @@ pip3 install -q markdown 2>/dev/null || {
 }
 
 # 检查配置文件
-if [ ! -f "config_private.py" ]; then
-    echo "❌ 未找到 config_private.py"
+if [ ! -f "$PROJECT_DIR/config_private.py" ]; then
+    echo "❌ 未找到 $PROJECT_DIR/config_private.py"
     echo "请先运行 bash start.sh 创建配置文件"
     exit 1
 fi
 
-if [ ! -f "email_config.py" ]; then
+if [ ! -f "$SCRIPT_DIR/email_config.py" ]; then
     echo "❌ 未找到 email_config.py"
-    echo "请先配置邮箱信息"
+    echo "请先配置邮箱信息: cp email_config_template.py email_config.py"
     exit 1
 fi
 

@@ -7,12 +7,6 @@
 - 调用树洞 RAG Agent 处理
 - 将结果以 Markdown 格式回复
 
-邮件格式：
-主题：[树洞] 你的问题描述
-正文：
-  模式1: keyword:计网 这门课怎么样？
-  模式2: 我想了解计算机图形学
-  模式3: course:计网 teacher:hq
 """
 
 import imaplib
@@ -25,6 +19,11 @@ import time
 import re
 import traceback
 from datetime import datetime
+import sys
+import os
+
+# 添加父目录到路径以导入主项目模块
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 导入配置
 try:
@@ -42,7 +41,7 @@ except ImportError:
     print("错误: 未找到 email_config.py，请先配置邮箱信息")
     exit(1)
 
-# 导入树洞 Agent
+# 导入树洞 Agent（从上级目录）
 from agent import TreeholeRAGAgent
 
 # Agent 前缀（用于日志）
@@ -62,12 +61,13 @@ class EmailBot:
         print(f"{PREFIX} 监听邮箱: {self.email}")
         print(f"{PREFIX} 检查间隔: {CHECK_INTERVAL}秒")
         
-        # 初始化树洞 Agent
+        # 初始化树洞 Agent（非交互模式）
         try:
-            self.agent = TreeholeRAGAgent()
+            self.agent = TreeholeRAGAgent(interactive=False)
             print(f"{PREFIX} 树洞 Agent 初始化成功")
         except Exception as e:
             print(f"{PREFIX} 错误: 无法初始化树洞 Agent - {e}")
+            print(f"{PREFIX} 提示: 请先在命令行运行 'python3 agent.py' 进行交互式登录并保存 cookies")
             raise
     
     def decode_subject(self, subject):
@@ -83,9 +83,13 @@ class EmailBot:
                 decoded.append(part)
         return ''.join(decoded)
     
-    def parse_prompt(self, body: str) -> dict:
+    def parse_prompt(self, subject: str, body: str) -> dict:
         """
-        解析邮件正文，识别查询模式
+        解析邮件主题和正文，识别查询模式
+        
+        参数:
+            subject: 邮件主题（用于判断模式）
+            body: 邮件正文（每行一个参数）
         
         返回:
             {
@@ -97,42 +101,58 @@ class EmailBot:
             }
         """
         body = body.strip()
+        lines = [line.strip() for line in body.split('\n') if line.strip()]
         
-        # 模式3: 课程测评分析
-        # 格式: course:计网 teacher:hq
-        course_match = re.search(r'course[:\s]+(\S+)', body, re.IGNORECASE)
-        teacher_match = re.search(r'teacher[:\s]+(\S+)', body, re.IGNORECASE)
+        # 从主题判断模式
+        subject_lower = subject.lower()
         
-        if course_match and teacher_match:
-            return {
-                "mode": 3,
-                "course": course_match.group(1),
-                "teacher": teacher_match.group(1),
-            }
+        # 模式 1: 手动检索
+        # 主题: "树洞 手动检索" 或 "树洞 手动" 或包含 "手动"
+        if '手动' in subject_lower:
+            if len(lines) >= 2:
+                return {
+                    "mode": 1,
+                    "keyword": lines[0],
+                    "question": '\n'.join(lines[1:]),
+                }
+            elif len(lines) == 1:
+                # 只有一行，当作关键词，问题为空
+                return {
+                    "mode": 1,
+                    "keyword": lines[0],
+                    "question": "请介绍一下这个话题",
+                }
         
-        # 模式1: 手动关键词
-        # 格式: keyword:计网 这门课怎么样？
-        keyword_match = re.search(r'keyword[:\s]+(\S+)\s+(.+)', body, re.IGNORECASE)
+        # 模式 3: 课程测评
+        # 主题: "树洞 课程测评" 或 "树洞 测评" 或包含 "测评" 或 "课程"
+        if '测评' in subject_lower or '课程' in subject_lower:
+            if len(lines) >= 2:
+                return {
+                    "mode": 3,
+                    "course": lines[0],
+                    "teacher": lines[1],
+                }
+            elif len(lines) == 1:
+                # 只有课程名，老师留空
+                return {
+                    "mode": 3,
+                    "course": lines[0],
+                    "teacher": "",
+                }
         
-        if keyword_match:
-            return {
-                "mode": 1,
-                "keyword": keyword_match.group(1),
-                "question": keyword_match.group(2).strip(),
-            }
-        
-        # 模式2: 自动关键词提取
-        # 格式: 直接输入问题
+        # 模式 2: 自动检索（默认）
+        # 主题: "树洞 自动检索" 或 "树洞 自动" 或其他
         return {
             "mode": 2,
             "question": body,
         }
     
-    def process_prompt(self, prompt: str) -> str:
+    def process_prompt(self, subject: str, prompt: str) -> str:
         """
         处理用户的查询请求
         
         参数:
+            subject: 邮件主题
             prompt: 邮件正文
             
         返回:
@@ -140,7 +160,7 @@ class EmailBot:
         """
         try:
             # 解析查询模式
-            parsed = self.parse_prompt(prompt)
+            parsed = self.parse_prompt(subject, prompt)
             mode = parsed["mode"]
             
             print(f"{PREFIX} 查询模式: {mode}")
@@ -213,12 +233,12 @@ class EmailBot:
             error_msg += "```\n\n"
             error_msg += "## 使用说明\n\n"
             error_msg += "请确保邮件格式正确：\n\n"
-            error_msg += "**模式1 - 手动关键词**:\n"
-            error_msg += "```\n主题: [树洞] 课程咨询\n正文: keyword:计网 这门课怎么样？\n```\n\n"
-            error_msg += "**模式2 - 自动提取**:\n"
-            error_msg += "```\n主题: [树洞] 课程咨询\n正文: 我想了解计算机图形学这门课\n```\n\n"
+            error_msg += "**模式1 - 手动检索**:\n"
+            error_msg += "```\n主题: 树洞 手动检索\n正文:\n计网\n这门课怎么样？\n```\n\n"
+            error_msg += "**模式2 - 自动检索**:\n"
+            error_msg += "```\n主题: 树洞 自动检索\n正文:\n我想了解计算机图形学这门课\n```\n\n"
             error_msg += "**模式3 - 课程测评**:\n"
-            error_msg += "```\n主题: [树洞] 课程测评\n正文: course:计网 teacher:hq\n```\n"
+            error_msg += "```\n主题: 树洞 课程测评\n正文:\n计网\nhq\n```\n"
             
             print(f"{PREFIX} 错误: {e}")
             traceback.print_exc()
@@ -319,9 +339,9 @@ class EmailBot:
                     
                     print(f"{PREFIX} 处理邮件: {subject} (来自 {from_email})")
                     
-                    # 检查主题前缀
-                    if not subject.startswith(SUBJECT_PREFIX):
-                        print(f"{PREFIX} 跳过: 主题不符合要求（需要以 '{SUBJECT_PREFIX}' 开头）")
+                    # 检查主题关键词
+                    if SUBJECT_PREFIX not in subject:
+                        print(f"{PREFIX} 跳过: 主题不符合要求（需要包含 '{SUBJECT_PREFIX}'）")
                         # 标记为已读
                         mail.store(num, "+FLAGS", "\\Seen")
                         continue
@@ -357,7 +377,7 @@ class EmailBot:
                     
                     # 处理查询
                     print(f"{PREFIX} 开始处理查询...")
-                    reply_body = self.process_prompt(body)
+                    reply_body = self.process_prompt(subject, body)
                     
                     # 发送回复
                     reply_subject = f"Re: {subject}"

@@ -5,6 +5,7 @@ Handles authentication and API interactions with PKU Treehole.
 
 import enum
 import json
+import os
 import random
 import re
 import uuid
@@ -33,14 +34,18 @@ class TreeholeClient:
     Handles authentication, post/comment retrieval, and search functionality.
     """
 
-    def __init__(self, cookies_file="cookies.json"):
+    def __init__(self, cookies_file=None):
         """
         Initialize the client, set headers, and load cookies if available.
         
         Args:
             cookies_file (str): Path to the cookies file for session persistence.
+                              If None, defaults to ~/.treehole_cookies.json
         """
         self.session = requests.Session()
+        # Use absolute path in home directory by default for consistency
+        if cookies_file is None:
+            cookies_file = os.path.expanduser("~/.treehole_cookies.json")
         self.cookies_file = cookies_file
         self.session.headers.update(
             {
@@ -131,9 +136,25 @@ class TreeholeClient:
             requests.Response: The HTTP response object.
         """
         response = self.session.post(
-            TreeHoleWeb.LOGIN_BY_TOKEN.value, data={"token": token}
+            TreeHoleWeb.LOGIN_BY_TOKEN.value, data={"code": token}  # API expects 'code' not 'token'
         )
         response.raise_for_status()
+        
+        # Extract and update authorization token from response
+        result = response.json()
+        
+        if result.get("success"):
+            # Token might be in different fields, check all possibilities
+            if "token" in result:
+                self.authorization = result["token"]
+            elif "data" in result and isinstance(result["data"], dict) and "token" in result["data"]:
+                self.authorization = result["data"]["token"]
+            
+            # Update session headers and cookies
+            if self.authorization:
+                self.session.cookies.update({"pku_token": self.authorization})
+                self.session.headers.update({"authorization": f"Bearer {self.authorization}"})
+        
         return response
 
     def login_by_message(self, code):
@@ -150,6 +171,14 @@ class TreeholeClient:
             TreeHoleWeb.LOGIN_BY_MESSAGE.value, data={"valid_code": code}
         )
         response.raise_for_status()
+        
+        # Extract and update authorization token from response
+        result = response.json()
+        if result.get("success") and "token" in result:
+            self.authorization = result["token"]
+            self.session.cookies.update({"pku_token": self.authorization})
+            self.session.headers.update({"authorization": f"Bearer {self.authorization}"})
+        
         return response
 
     def send_message(self):
@@ -347,13 +376,15 @@ class TreeholeClient:
         except Exception as e:
             print(f"Error loading cookies: {e}")
 
-    def ensure_login(self, username=None, password=None):
+    def ensure_login(self, username=None, password=None, interactive=True):
         """
         Ensure the client is logged in. If not, perform login.
         
         Args:
             username (str): Username for login.
             password (str): Password for login.
+            interactive (bool): Whether to prompt for user input during verification.
+                              Set to False for background services.
             
         Returns:
             bool: True if logged in successfully, False otherwise.
@@ -372,20 +403,45 @@ class TreeholeClient:
             response = self.un_read()
             
             # Handle additional authentication if needed
-            while not response.json().get("success"):
-                if response.json().get("message") == "请手机短信验证":
+            max_attempts = 5  # Prevent infinite loop
+            attempt = 0
+            while not response.json().get("success") and attempt < max_attempts:
+                attempt += 1
+                result = response.json()
+                
+                if result.get("message") == "请手机短信验证":
+                    if not interactive:
+                        print("SMS verification required but running in non-interactive mode.")
+                        return False
                     tmp = input("Send verification code (Y/n): ")
                     if tmp.lower() == "y":
                         self.send_message()
                         code = input("SMS verification code: ")
                         self.login_by_message(code)
-                elif response.json().get("message") == "请进行令牌验证":
+                    else:
+                        print("SMS verification cancelled.")
+                        return False
+                elif result.get("message") == "请进行令牌验证":
+                    if not interactive:
+                        print("Mobile token verification required but running in non-interactive mode.")
+                        print("Please login interactively first to save cookies.")
+                        return False
                     token = input("Mobile token: ")
                     self.login_by_token(token)
+                else:
+                    print(f"Unknown verification requirement: {result.get('message')}")
+                    return False
+                
+                # Check if verification was successful
                 response = self.un_read()
             
-            self.save_cookies()
-            return True
+            # Check final result
+            if response.json().get("success"):
+                self.save_cookies()
+                return True
+            else:
+                print(f"Login failed after {attempt} attempts")
+                return False
         else:
             print("Login required but no credentials provided.")
             return False

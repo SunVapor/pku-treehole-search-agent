@@ -15,7 +15,7 @@ IMAP_SERVER = "imap.qq.com"
 CHECK_INTERVAL = 30
 
 # 邮件处理配置
-SUBJECT_PREFIX = "[树洞]"  # 只处理这个前缀开头的邮件
+SUBJECT_PREFIX = "树洞"  # 只处理包含此关键词的邮件
 MAX_POSTS_PER_SEARCH = 20  # 每次搜索最多处理的帖子数
 
 # 如何获取 QQ 邮箱授权码：

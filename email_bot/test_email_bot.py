@@ -5,6 +5,12 @@
 测试邮件解析和查询功能（不实际发送邮件）
 """
 
+import sys
+import os
+
+# 添加父目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from bot_email import EmailBot
 
 def test_parse_prompt():
@@ -17,7 +23,7 @@ def test_parse_prompt():
     
     # 测试模式 1
     print("\n1. 测试模式 1 (手动关键词):")
-    result = bot.parse_prompt("keyword:计网 这门课怎么样？")
+    result = bot.parse_prompt("树洞 手动检索", "计网\n这门课怎么样？")
     print(f"   解析结果: {result}")
     assert result["mode"] == 1
     assert result["keyword"] == "计网"
@@ -26,7 +32,7 @@ def test_parse_prompt():
     
     # 测试模式 2
     print("\n2. 测试模式 2 (自动提取):")
-    result = bot.parse_prompt("我想了解计算机图形学")
+    result = bot.parse_prompt("树洞 自动检索", "我想了解计算机图形学")
     print(f"   解析结果: {result}")
     assert result["mode"] == 2
     assert "我想了解计算机图形学" in result["question"]
@@ -34,7 +40,7 @@ def test_parse_prompt():
     
     # 测试模式 3
     print("\n3. 测试模式 3 (课程测评):")
-    result = bot.parse_prompt("course:计网 teacher:hq")
+    result = bot.parse_prompt("树洞 课程测评", "计网\nhq")
     print(f"   解析结果: {result}")
     assert result["mode"] == 3
     assert result["course"] == "计网"

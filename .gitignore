@@ -6,9 +6,12 @@ __pycache__/
 # Private configuration
 config_private.py
 email_config.py
+email_bot/email_config.py
 
-# Cookies
+# Cookies and session files
 cookies.json
+*.cookies.json
+.treehole_cookies.json
 
 # Cache and data
 data/

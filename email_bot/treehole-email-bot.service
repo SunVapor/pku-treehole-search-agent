@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/pku-treehole-search-agent
-ExecStart=/usr/bin/python3 /home/ubuntu/pku-treehole-search-agent/bot_email.py
+WorkingDirectory=/home/ubuntu/pku-treehole-search-agent/email_bot
+ExecStart=/usr/bin/python3 /home/ubuntu/pku-treehole-search-agent/email_bot/bot_email.py
 Restart=always
 RestartSec=10
 StandardOutput=append:/home/ubuntu/pku-treehole-search-agent/logs/bot.log

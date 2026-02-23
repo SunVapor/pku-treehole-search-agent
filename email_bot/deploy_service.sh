@@ -2,6 +2,7 @@
 # 使用 systemd 部署邮件机器人为系统服务
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 SERVICE_FILE="treehole-email-bot.service"
 
 echo "=========================================="
@@ -17,8 +18,8 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # 创建日志目录
-mkdir -p "$SCRIPT_DIR/logs"
-chown ubuntu:ubuntu "$SCRIPT_DIR/logs"
+mkdir -p "$PROJECT_DIR/logs"
+chown ubuntu:ubuntu "$PROJECT_DIR/logs"
 
 # 复制 service 文件到 systemd 目录
 echo "1. 安装 systemd 服务..."
@@ -47,7 +48,7 @@ systemctl status treehole-email-bot.service --no-pager
 echo ""
 echo "📝 常用命令:"
 echo "  - 查看状态: sudo systemctl status treehole-email-bot"
-echo "  - 查看日志: tail -f $SCRIPT_DIR/logs/bot.log"
+echo "  - 查看日志: tail -f $PROJECT_DIR/logs/bot.log"
 echo "  - 停止服务: sudo systemctl stop treehole-email-bot"
 echo "  - 重启服务: sudo systemctl restart treehole-email-bot"
 echo "  - 禁用服务: sudo systemctl disable treehole-email-bot"

@@ -18,8 +18,11 @@ bash start.sh
 通过邮件远程查询，无需登录服务器！
 
 ```bash
-# 1. 配置邮箱（复制模板并编辑）
+cd ~/pku-treehole-search-agent/email_bot
+
+# 1. 配置邮箱
 cp email_config_template.py email_config.py
+# 编辑 email_config.py 填入邮箱信息
 
 # 2. 启动邮件机器人
 bash start_email_bot.sh
@@ -28,9 +31,9 @@ bash start_email_bot.sh
 sudo bash deploy_service.sh
 ```
 
-发送邮件到配置的邮箱，主题以 `[树洞]` 开头即可自动回复！
+发送邮件到配置的邮箱，主题包含 `树洞` 即可自动回复！
 
-详见 [EMAIL_BOT_GUIDE.md](EMAIL_BOT_GUIDE.md)
+详见 [email_bot/README.md](email_bot/README.md)
 
 ### 手动配置
 
@@ -105,7 +108,7 @@ CACHE_EXPIRATION = 86400   # 缓存过期时间（秒）
 ## 📁 项目结构
 
 ```
-pku-treehole-rag-agent/
+pku-treehole-search-agent/
 ├── README.md              # 项目文档
 ├── start.sh               # 一键启动脚本
 ├── config.py              # 配置模板
@@ -113,6 +116,11 @@ pku-treehole-rag-agent/
 ├── client.py              # 树洞 API 客户端
 ├── agent.py               # RAG Agent 主逻辑
 ├── utils.py               # 工具函数
+├── email_bot/             # 邮件机器人 🆕
+│   ├── README.md          # 邮件机器人文档
+│   ├── bot_email.py       # 邮件机器人主程序
+│   ├── email_config_template.py  # 配置模板
+│   └── ...                # 其他脚本和配置
 └── data/cache/            # 搜索结果缓存
 ```
 
@@ -146,6 +154,42 @@ pku-treehole-rag-agent/
 }
 ```
 
+### 认证系统
+
+#### 登录流程
+1. **OAuth 登录**: `oauth_login(username, password)` → 获取 token
+2. **SSO 登录**: `sso_login(token)` → 获取 authorization
+3. **额外验证**（如需要）:
+   - SMS 验证: `send_message()` + `login_by_message(code)`
+   - Mobile Token: `login_by_token(code)` ⚠️ 注意：参数名为 `code`
+
+#### Cookie 持久化
+- Cookie 文件统一保存在 `~/.treehole_cookies.json`
+- 跨项目目录共享（主程序和邮件机器人共用）
+- 自动加载和保存，避免频繁登录
+
+#### 非交互模式 🆕
+```python
+# 后台服务部署时使用非交互模式
+agent = TreeholeRAGAgent(interactive=False)
+
+# 交互模式（命令行使用）
+agent = TreeholeRAGAgent(interactive=True)  # 默认
+```
+
+**用途**:
+- `interactive=False`: 无法读取 stdin，登录失败时直接返回（适合systemd服务）
+- `interactive=True`: 可以提示用户输入验证码/token（适合命令行）
+
+**首次部署**:
+```bash
+# 1. 先交互式登录一次，保存 cookies
+python3 agent.py
+
+# 2. 然后部署为服务（会自动使用保存的 cookies）
+cd email_bot && sudo bash deploy_service.sh
+```
+
 ### 评论获取 API
 
 **端点**: `GET /chapi/api/v3/hole/{pid}/comments`
@@ -161,12 +205,28 @@ pku-treehole-rag-agent/
 
 ## 🚨 故障排除
 
-### 问题 1: 登录失败
+### 问题 1: 登录失败 / 需要令牌验证
 
-**解决**:
+**现象**: 登录时提示 "Mobile token:" 或 "请进行令牌验证"
+
+**解决方案**:
 ```bash
-rm cookies.json  # 删除旧 cookie
-python3 agent.py  # 重新登录
+# 删除旧 cookie
+rm ~/.treehole_cookies.json
+
+# 交互式重新登录
+python3 agent.py
+
+# 输入你的 PKU 手机令牌（6位数字，从 PKU Helper App 获取）
+```
+
+**邮件机器人部署**:
+```bash
+# 1. 先在命令行交互式登录，保存 cookies
+python3 agent.py
+
+# 2. 然后重启邮件机器人服务
+sudo systemctl restart treehole-email-bot
 ```
 
 ### 问题 2: DeepSeek API 错误
@@ -183,6 +243,22 @@ python3 agent.py  # 重新登录
 # 在 config_private.py 中
 SEARCH_DELAY = 2.0  # 从 1.0 改为 2.0
 ```
+
+### 问题 4: 邮件机器人无法启动
+
+**检查日志**:
+```bash
+# 查看服务状态
+sudo systemctl status treehole-email-bot
+
+# 查看详细日志
+tail -f ~/pku-treehole-search-agent/logs/bot.log
+```
+
+**常见原因**:
+- **EOF when reading a line**: Cookies 已过期，需要交互式重新登录
+- **Failed to login**: 检查 `config_private.py` 中的账号密码
+- **IMAP/SMTP error**: 检查 `email_config.py` 中的邮箱授权码
 
 ## 💡 注意事项
 
