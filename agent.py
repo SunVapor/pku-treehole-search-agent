@@ -389,6 +389,7 @@ class TreeholeRAGAgent:
         ]
         
         all_searched_posts = []
+        search_history = []  # 记录搜索历史
         search_count = 0
         max_searches = MAX_SEARCH_ITERATIONS
         
@@ -408,6 +409,13 @@ class TreeholeRAGAgent:
                         args = json.loads(tool_call["function"]["arguments"])
                         keyword = args.get("keyword", "")
                         reason = args.get("reason", "")
+                        
+                        # 记录搜索历史
+                        search_history.append({
+                            "iteration": search_count,
+                            "keyword": keyword,
+                            "reason": reason
+                        })
                         
                         print(f"\n{AGENT_PREFIX}[第{search_count}次搜索] 关键词: {keyword}")
                         if reason:
@@ -479,6 +487,7 @@ class TreeholeRAGAgent:
         return {
             "answer": final_answer,
             "search_count": search_count,
+            "search_history": search_history,  # 搜索历史记录
             "keywords": [],  # 智能检索模式下不预先提取关键词
             "sources": [{"pid": p.get("pid"), "text": p.get("text", "")[:100] + "..."} for p in unique_posts[:20]],
             "num_sources": len(unique_posts),

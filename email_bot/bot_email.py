@@ -187,18 +187,24 @@ class EmailBot:
                     response += f"\n\n---\n\n**参考来源**: {result['num_sources']} 个帖子\n"
                 
             elif mode == 2:
-                # 自动关键词提取模式
+                # 智能自动检索模式
                 question = parsed["question"]
-                response += f"**模式**: 自动关键词提取\n"
+                response += f"**模式**: 智能自动检索\n"
                 response += f"**问题**: {question}\n\n"
                 response += "---\n\n"
                 
                 print(f"{PREFIX} 问题: {question}")
                 result = self.agent.mode_auto_search(question)
                 
-                # 显示提取的关键词
-                if result.get("keywords"):
-                    response += f"**提取的关键词**: {', '.join(result['keywords'])}\n\n"
+                # 显示搜索历史
+                if result.get("search_history"):
+                    response += f"**搜索过程** ({result['search_count']} 次搜索):\n\n"
+                    for item in result["search_history"]:
+                        response += f"{item['iteration']}. `{item['keyword']}`"
+                        if item.get('reason'):
+                            response += f" - {item['reason']}"
+                        response += "\n"
+                    response += "\n"
                 
                 response += result["answer"]
                 
