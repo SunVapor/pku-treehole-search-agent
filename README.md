@@ -68,9 +68,17 @@ sudo bash deploy_service.sh
 - 用户提供关键词 + 问题
 - 适合明确知道要搜什么的场景
 
-#### 模式 2: 自动关键词提取
-- 只需输入自然语言问题
-- AI 自动提取关键词并搜索
+#### 模式 2: 智能自动检索 🆕⭐
+- **只需输入自然语言问题**
+- **LLM 自主决策搜索策略**
+- **支持多轮迭代搜索（最多 3 次）**
+- **工作流程**：
+  1. LLM 分析问题并决定搜索关键词
+  2. 执行搜索并分析结果
+  3. 如信息不足，LLM 可再次搜索（换用不同关键词）
+  4. 迭代直至获取充分信息
+  5. 综合所有搜索结果给出最终回答
+- **类似 MCP 工具调用模式**：LLM 像使用工具一样调用搜索功能
 
 #### 模式 3: 课程测评分析 ⭐
 专门为选课设计的深度分析模式：
@@ -94,16 +102,18 @@ sudo bash deploy_service.sh
 
 ```python
 # 搜索配置
-MAX_SEARCH_RESULTS = 40    # 每次搜索最多获取帖子数
-MAX_CONTEXT_POSTS = 30     # 发送给 LLM 的最大帖子数
+MAX_SEARCH_RESULTS = 40       # 每次搜索最多获取帖子数
+MAX_CONTEXT_POSTS = 30        # 发送给 LLM 的最大帖子数
+MAX_COMMENTS_PER_POST = 10    # 每个帖子最多包含评论数
+MAX_SEARCH_ITERATIONS = 3     # 智能检索最大搜索次数 🆕
 
 # LLM 配置
-TEMPERATURE = 0.7          # 生成温度（0.0-1.0）
-MAX_RESPONSE_TOKENS = 4096 # 最大响应长度
+TEMPERATURE = 0.7             # 生成温度（0.0-1.0）
+MAX_RESPONSE_TOKENS = 4096    # 最大响应长度
 
 # 缓存配置
-ENABLE_CACHE = True        # 是否启用缓存
-CACHE_EXPIRATION = 86400   # 缓存过期时间（秒）
+ENABLE_CACHE = True           # 是否启用缓存
+CACHE_EXPIRATION = 86400      # 缓存过期时间（秒）
 ```
 
 ## 📁 项目结构

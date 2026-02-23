@@ -38,6 +38,7 @@ try:
         MAX_SEARCH_RESULTS,
         MAX_CONTEXT_POSTS,
         MAX_COMMENTS_PER_POST,
+        MAX_SEARCH_ITERATIONS,
         TEMPERATURE,
         MAX_RESPONSE_TOKENS,
         SEARCH_DELAY,
@@ -55,6 +56,7 @@ except ImportError:
         MAX_SEARCH_RESULTS,
         MAX_CONTEXT_POSTS,
         MAX_COMMENTS_PER_POST,
+        MAX_SEARCH_ITERATIONS,
         TEMPERATURE,
         MAX_RESPONSE_TOKENS,
         SEARCH_DELAY,
@@ -326,8 +328,8 @@ class TreeholeRAGAgent:
 
     def mode_auto_search(self, user_question: str) -> Dict[str, Any]:
         """
-        Mode 2: Automatic keyword extraction.
-        LLM extracts keywords from user question, then searches and answers.
+        Mode 2: Automatic keyword extraction with intelligent iterative search.
+        LLM can decide to search multiple times until satisfied.
         
         Args:
             user_question (str): User's question.
@@ -335,86 +337,202 @@ class TreeholeRAGAgent:
         Returns:
             dict: Response containing answer and sources.
         """
-        print_header("模式 2: 自动关键词提取")
+        print_header("模式 2: 智能自动检索（支持多轮搜索）")
         
-        # Step 1: Extract keywords using LLM
-        print(f"{AGENT_PREFIX}✓ 正在从问题中提取关键词...")
-        keyword_prompt = f"""请从以下问题中提取最适合在北大树洞搜索的关键词（1-3个词）。
-只返回关键词，用空格分隔，不要有其他解释。
-
-问题：{user_question}
-
-关键词："""
-
-        keywords_str = self.call_deepseek(keyword_prompt, temperature=0.3, stream=False)
-        keywords = keywords_str.strip().split()[:3]  # Take first 3 keywords
-        
-        print(f"{AGENT_PREFIX}✓ 提取的关键词: {keywords}")
-        
-        # Step 2: Search with each keyword and combine results
-        all_posts = []
-        for keyword in keywords:
-            posts = self.search_treehole(keyword, max_results=MAX_SEARCH_RESULTS // len(keywords))
-            all_posts.extend(posts)
-            time.sleep(SEARCH_DELAY)
-        
-        # Deduplicate by pid
-        unique_posts = {post["pid"]: post for post in all_posts}.values()
-        unique_posts = list(unique_posts)
-        
-        print(f"{AGENT_PREFIX}✓ 找到 {len(unique_posts)} 个不重复的帖子")
-        
-        if not unique_posts:
-            return {
-                "answer": f"抱歉，没有找到相关的树洞内容。提取的关键词：{', '.join(keywords)}",
-                "keywords": keywords,
-                "sources": [],
+        # Define the search tool for LLM
+        search_tool = {
+            "type": "function",
+            "function": {
+                "name": "search_treehole",
+                "description": "在北大树洞中搜索相关帖子。如果当前信息不足以回答问题，可以使用不同的关键词多次调用此函数。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "keyword": {
+                            "type": "string",
+                            "description": "搜索关键词，应该是最相关的1-3个词"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "为什么需要搜索这个关键词（可选）"
+                        }
+                    },
+                    "required": ["keyword"]
+                }
             }
+        }
         
-        # Step 3: Display retrieved content
-        context_posts = smart_truncate_posts(unique_posts[:MAX_CONTEXT_POSTS], max_comments=MAX_COMMENTS_PER_POST)
-        print(f"{AGENT_PREFIX}✓ 使用 {len(context_posts)} 个帖子作为上下文")
-        
-        print_separator("-")
-        print("\n【检索到的内容】\n")
-        for i, post in enumerate(context_posts, 1):
-            print(f"{i}. 帖子 #{post.get('pid')} - {post.get('text', '')[:60]}...")
-            comments = post.get('comments') or post.get('comment_list') or []
-            if comments:
-                comment_info = f"前{MAX_COMMENTS_PER_POST}条" if MAX_COMMENTS_PER_POST > 0 else "全部"
-                print(f"   评论数: {len(comments)} ({comment_info})")
-        print_separator("-")
-        
-        context_text = format_posts_batch(context_posts, include_comments=True, max_comments=MAX_COMMENTS_PER_POST)
-        
-        system_message = """你是一个北大树洞问答助手。你的任务是根据提供的树洞帖子内容，回答用户的问题。
+        # Initialize conversation
+        messages = [
+            {
+                "role": "system",
+                "content": """你是一个北大树洞问答助手。你可以通过调用 search_treehole 函数来搜索树洞中的相关内容。
+
+工作流程：
+1. 分析用户问题，确定需要搜索的关键词
+2. 调用 search_treehole 函数搜索
+3. 分析搜索结果，判断信息是否足够
+4. 如果信息不足，可以用不同关键词再次搜索
+5. 信息充足后，基于所有搜索结果回答用户问题
 
 注意事项：
-1. 只基于提供的树洞内容回答，不要编造信息
-2. 如果树洞内容不足以回答问题，诚实地告知用户
-3. 可以综合多个帖子的观点给出全面的回答
-4. 保持客观，如果有不同观点要都提及
-5. 回答要有条理，使用markdown格式时只能使用单级列表，不能出现多级列表"""
-
-        user_message = f"""树洞内容：
-
-{context_text}
-
----
-
-用户问题：{user_question}
-
-请基于以上树洞内容回答用户的问题。"""
-
-        print("\n【LLM回答】\n")
-        answer = self.call_deepseek(user_message, system_message, stream=True)
+- 只基于搜索到的树洞内容回答，不要编造信息
+- 可以多次搜索不同关键词以获取全面信息
+- 搜索次数建议不超过3次
+- 如果树洞内容不足以回答问题，诚实地告知用户
+- 保持客观，综合多个观点"""
+            },
+            {
+                "role": "user",
+                "content": f"用户问题：{user_question}"
+            }
+        ]
+        
+        all_searched_posts = []
+        search_count = 0
+        max_searches = MAX_SEARCH_ITERATIONS
+        
+        print(f"{AGENT_PREFIX}✓ LLM 开始分析问题...")
+        
+        # Iterative search loop
+        while search_count < max_searches:
+            # Call LLM with function calling
+            response = self._call_deepseek_with_tools(messages, [search_tool], stream=False)
+            
+            # Check if LLM wants to use the search tool
+            if response.get("tool_calls"):
+                for tool_call in response["tool_calls"]:
+                    if tool_call["function"]["name"] == "search_treehole":
+                        search_count += 1
+                        import json
+                        args = json.loads(tool_call["function"]["arguments"])
+                        keyword = args.get("keyword", "")
+                        reason = args.get("reason", "")
+                        
+                        print(f"\n{AGENT_PREFIX}[第{search_count}次搜索] 关键词: {keyword}")
+                        if reason:
+                            print(f"{AGENT_PREFIX}搜索原因: {reason}")
+                        
+                        # Perform search
+                        posts = self.search_treehole(keyword, max_results=MAX_SEARCH_RESULTS // max_searches)
+                        all_searched_posts.extend(posts)
+                        
+                        # Format search results for LLM
+                        if posts:
+                            context_posts = smart_truncate_posts(posts[:10], max_comments=MAX_COMMENTS_PER_POST)
+                            context_text = format_posts_batch(context_posts, include_comments=True, max_comments=MAX_COMMENTS_PER_POST)
+                            result_summary = f"搜索到 {len(posts)} 个帖子。以下是部分内容：\n\n{context_text}"
+                        else:
+                            result_summary = f"未找到关于「{keyword}」的相关帖子。"
+                        
+                        # Add assistant's tool call and tool result to messages
+                        messages.append({
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": response["tool_calls"]
+                        })
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call["id"],
+                            "name": "search_treehole",
+                            "content": result_summary
+                        })
+                        
+                        print(f"{AGENT_PREFIX}✓ 搜索完成，找到 {len(posts)} 个帖子")
+                        time.sleep(SEARCH_DELAY)
+                
+                # Continue the loop to let LLM decide next action
+                continue
+            else:
+                # LLM doesn't want to search anymore, get final answer
+                final_answer = response.get("content", "")
+                break
+        else:
+            # Max searches reached, force LLM to give answer
+            messages.append({
+                "role": "user",
+                "content": "已达到最大搜索次数，请基于现有信息回答用户问题。"
+            })
+            response = self._call_deepseek_with_tools(messages, [], stream=False)
+            final_answer = response.get("content", "")
+        
+        # Deduplicate all searched posts
+        unique_posts = {post["pid"]: post for post in all_searched_posts}.values()
+        unique_posts = list(unique_posts)
+        
+        print(f"\n{AGENT_PREFIX}✓ 总共找到 {len(unique_posts)} 个不重复的帖子")
+        
+        # Display final answer with streaming
+        print_separator("-")
+        print("\n【最终回答】\n")
+        
+        # Stream the final answer
+        if final_answer:
+            for char in final_answer:
+                print(char, end="", flush=True)
+            print("\n")
+        else:
+            print("未能生成回答。\n")
+        
+        print_separator("-")
         
         return {
-            "answer": answer,
-            "keywords": keywords,
-            "sources": [{"pid": p.get("pid"), "text": p.get("text", "")[:100] + "..."} for p in context_posts],
-            "num_sources": len(context_posts),
+            "answer": final_answer,
+            "search_count": search_count,
+            "keywords": [],  # 智能检索模式下不预先提取关键词
+            "sources": [{"pid": p.get("pid"), "text": p.get("text", "")[:100] + "..."} for p in unique_posts[:20]],
+            "num_sources": len(unique_posts),
         }
+    
+    def _call_deepseek_with_tools(self, messages: List[Dict], tools: List[Dict], stream: bool = False) -> Dict:
+        """
+        Call DeepSeek API with function calling support.
+        
+        Args:
+            messages: Conversation messages.
+            tools: Available tools/functions.
+            stream: Whether to stream the response.
+            
+        Returns:
+            Response dict with content or tool_calls.
+        """
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        
+        data = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": TEMPERATURE,
+            "max_tokens": MAX_RESPONSE_TOKENS,
+        }
+        
+        if tools:
+            data["tools"] = tools
+            data["tool_choice"] = "auto"
+        
+        try:
+            response = requests.post(
+                f"{self.api_base}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=120,
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            choice = result["choices"][0]
+            message = choice["message"]
+            
+            return {
+                "content": message.get("content"),
+                "tool_calls": message.get("tool_calls"),
+            }
+            
+        except Exception as e:
+            print(f"{AGENT_PREFIX}错误: DeepSeek API 调用失败 - {e}")
+            return {"content": None, "tool_calls": None}
 
     def mode_course_review(self, course_abbr: str, teacher_initials: str) -> Dict[str, Any]:
         """
