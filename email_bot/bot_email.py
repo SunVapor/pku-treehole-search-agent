@@ -97,7 +97,7 @@ class EmailBot:
                 "keyword": str (模式1),
                 "question": str (模式1/2),
                 "course": str (模式3),
-                "teacher": str (模式3)
+                "teacher": str (模式3，支持多个老师，用逗号/空格分隔)
             }
         """
         body = body.strip()
@@ -213,16 +213,27 @@ class EmailBot:
                     response += f"\n\n---\n\n**参考来源**: {result['num_sources']} 个帖子\n"
                 
             elif mode == 3:
-                # 课程测评分析模式
+                # 课程测评分析模式（支持多老师横向对比）
                 course = parsed["course"]
                 teacher = parsed["teacher"]
-                response += f"**模式**: 课程测评分析\n"
-                response += f"**课程**: {course}\n"
-                response += f"**老师**: {teacher}\n\n"
-                response += "---\n\n"
-                
-                print(f"{PREFIX} 课程: {course}, 老师: {teacher}")
-                result = self.agent.mode_course_review(course, teacher)
+                teacher_list = self.agent.parse_teacher_input(teacher)
+
+                if len(teacher_list) > 1:
+                    response += f"**模式**: 课程测评横向对比\n"
+                    response += f"**课程**: {course}\n"
+                    response += f"**老师列表**: {', '.join(teacher_list)}\n\n"
+                    response += "---\n\n"
+
+                    print(f"{PREFIX} 课程: {course}, 老师列表: {teacher_list}")
+                    result = self.agent.mode_course_review_compare(course, teacher_list)
+                else:
+                    response += f"**模式**: 课程测评分析\n"
+                    response += f"**课程**: {course}\n"
+                    response += f"**老师**: {teacher}\n\n"
+                    response += "---\n\n"
+
+                    print(f"{PREFIX} 课程: {course}, 老师: {teacher}")
+                    result = self.agent.mode_course_review(course, teacher)
                 response += result["answer"]
                 
                 # 添加来源信息
