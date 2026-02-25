@@ -385,8 +385,16 @@ class EmailBot:
                     print(f"{PREFIX} 开始处理查询...")
                     reply_body = self.process_prompt(subject, body)
                     
-                    # 发送回复
-                    reply_subject = f"Re: {subject}"
+                    # 生成不含"树洞"的回信标题，避免触发回环
+                    parsed = self.parse_prompt(subject, body)
+                    mode = parsed["mode"]
+                    if mode == 1:
+                        reply_subject = f"[检索结果] {parsed.get('keyword', '')[:20]}"
+                    elif mode == 2:
+                        q = parsed.get('question', '').replace('\n', ' ')[:25]
+                        reply_subject = f"[检索结果] {q}"
+                    else:
+                        reply_subject = f"[测评结果] {parsed.get('course', '')} · {parsed.get('teacher', '')}"
                     self.send_reply(from_email, reply_subject, reply_body)
                     
                     print(f"{PREFIX} 查询处理完成")

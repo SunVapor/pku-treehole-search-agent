@@ -350,7 +350,7 @@ class TreeholeRAGAgent:
                     "properties": {
                         "keyword": {
                             "type": "string",
-                            "description": "搜索关键词，应该是最相关的1-3个词"
+                            "description": "搜索关键词，精准的1-2个词，不要包含多个概念"
                         },
                         "reason": {
                             "type": "string",
@@ -366,19 +366,19 @@ class TreeholeRAGAgent:
         messages = [
             {
                 "role": "system",
-                "content": """你是一个北大树洞问答助手。你可以通过调用 search_treehole 函数来搜索树洞中的相关内容。
+                "content": f"""你是一个北大树洞问答助手。你可以通过调用 search_treehole 函数来搜索树洞中的相关内容。
 
 工作流程：
-1. 分析用户问题，确定需要搜索的关键词
-2. 调用 search_treehole 函数搜索
+1. 分析用户问题，确定最核心的搜索关键词
+2. 调用 search_treehole，关键词最好控制在1-2个词
 3. 分析搜索结果，判断信息是否足够
-4. 如果信息不足，可以用不同关键词再次搜索
+4. 如果信息不足，可以换用不同的关键词再次搜索
 5. 信息充足后，基于所有搜索结果回答用户问题
 
 注意事项：
+- 每次调用只搜索1-2个关键词
 - 只基于搜索到的树洞内容回答，不要编造信息
-- 可以多次搜索不同关键词以获取全面信息
-- 搜索次数建议不超过3次
+- 搜索次数建议不超过 {MAX_SEARCH_ITERATIONS} 次
 - 如果树洞内容不足以回答问题，诚实地告知用户
 - 保持客观，综合多个观点"""
             },
