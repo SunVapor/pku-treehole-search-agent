@@ -609,17 +609,11 @@ class TreeholeRAGAgent:
                 # Continue the loop to let LLM decide next action
                 continue
             else:
-                # LLM doesn't want to search anymore, get final answer
-                final_answer = response.get("content", "")
+                # LLM doesn't want to search anymore, prepare for final answer
                 break
         else:
-            # Max searches reached, force LLM to give answer
-            messages.append({
-                "role": "user",
-                "content": "已达到最大搜索次数，请基于现有信息回答用户问题。"
-            })
-            response = self._call_deepseek_with_tools(messages, [], stream=False)
-            final_answer = response.get("content", "")
+            # Max searches reached
+            pass
         
         # Deduplicate all searched posts
         unique_posts = {post["pid"]: post for post in all_searched_posts}.values()
@@ -627,18 +621,45 @@ class TreeholeRAGAgent:
         
         print(f"\n{AGENT_PREFIX}✓ 总共找到 {len(unique_posts)} 个不重复的帖子")
         
-        # Display final answer with streaming
+        # Prepare context for final answer generation
+        if unique_posts:
+            context_posts = smart_truncate_posts(list(unique_posts)[:20], max_comments=MAX_COMMENTS_PER_POST)
+            context_text = format_posts_batch(context_posts, include_comments=True, max_comments=MAX_COMMENTS_PER_POST)
+        else:
+            context_text = "未找到相关内容。"
+        
+        # Generate final answer with streaming
         print_separator("-")
         print("\n【最终回答】\n")
         
-        # Stream the final answer
-        if final_answer:
-            for char in final_answer:
-                print(char, end="", flush=True)
-            print("\n")
-        else:
-            print("未能生成回答。\n")
+        final_prompt = f"""基于以下树洞搜索结果，回答用户的问题。
+
+用户问题：{user_question}
+
+搜索历史：
+"""
+        for item in search_history:
+            final_prompt += f"{item['iteration']}. {item['keyword']}"
+            if item.get('reason'):
+                final_prompt += f" - {item['reason']}"
+            final_prompt += "\n"
         
+        final_prompt += f"\n树洞内容：\n{context_text}\n\n请基于以上内容回答用户问题。如果内容不足以回答，请诚实说明。"
+        
+        final_system_prompt = """你是北大树洞问答助手。请基于提供的树洞内容回答问题：
+- 只使用提供的内容，不要编造信息
+- 保持客观，综合多个观点
+- 如果信息不足，诚实说明
+- 回答要清晰、有条理"""
+        
+        # Use streaming call_deepseek for final answer
+        final_answer = self.call_deepseek(
+            user_message=final_prompt,
+            system_message=final_system_prompt,
+            stream=True
+        )
+        
+        print("\n")
         print_separator("-")
         
         return {
