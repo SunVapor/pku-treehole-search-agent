@@ -85,6 +85,7 @@ class TreeholeRAGAgent:
         self.api_base = DEEPSEEK_API_BASE
         self.model = DEEPSEEK_MODEL
         self._all_comments_cache: Dict[int, List[Dict[str, Any]]] = {}
+        self.stream_callback = None  # Optional callback for streaming output
         
         # Ensure login
         if not self.client.ensure_login(USERNAME, PASSWORD, interactive=interactive):
@@ -316,7 +317,8 @@ class TreeholeRAGAgent:
         user_message: str, 
         system_message: Optional[str] = None,
         temperature: float = TEMPERATURE,
-        stream: bool = True
+        stream: bool = True,
+        callback: Optional[callable] = None
     ) -> str:
         """
         Call DeepSeek API for chat completion.
@@ -326,6 +328,7 @@ class TreeholeRAGAgent:
             system_message (str): System message (optional).
             temperature (float): Temperature for generation.
             stream (bool): Whether to use streaming output.
+            callback (callable): Optional callback function for streaming chunks.
             
         Returns:
             str: LLM response (accumulated if streaming).
@@ -376,12 +379,18 @@ class TreeholeRAGAgent:
                                     delta = chunk['choices'][0].get('delta', {})
                                     content = delta.get('content', '')
                                     if content:
-                                        print(content, end='', flush=True)
+                                        # Use instance callback first, then parameter callback
+                                        cb = self.stream_callback or callback
+                                        if cb:
+                                            cb(content)
+                                        else:
+                                            print(content, end='', flush=True)
                                         full_content += content
                             except json.JSONDecodeError:
                                 continue
                 
-                print()  # New line after streaming
+                if not (self.stream_callback or callback):
+                    print()  # New line after streaming
                 return full_content
             else:
                 # Non-streaming response
