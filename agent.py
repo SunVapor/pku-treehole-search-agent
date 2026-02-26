@@ -447,8 +447,8 @@ class TreeholeRAGAgent:
         if self.info_callback:
             self.info_callback(msg)
         
-        # Step 2: Select top posts for context
-        context_posts = smart_truncate_posts(posts[:MAX_CONTEXT_POSTS], max_comments=MAX_COMMENTS_PER_POST)
+        # Step 2: Select top posts for context (increased token limit)
+        context_posts = smart_truncate_posts(posts[:MAX_CONTEXT_POSTS], max_comments=MAX_COMMENTS_PER_POST, max_tokens=10000)
         msg = f"✓ 使用 {len(context_posts)} 个帖子作为上下文"
         print(f"{AGENT_PREFIX}{msg}")
         if self.info_callback:
@@ -597,8 +597,8 @@ class TreeholeRAGAgent:
                         temp_callback = self.info_callback
                         self.info_callback = None
                         
-                        # Perform search
-                        posts = self.search_treehole(keyword, max_results=MAX_SEARCH_RESULTS // max_searches)
+                        # Perform search - 每次搜索30个帖子（不再按总次数平均分配）
+                        posts = self.search_treehole(keyword, max_results=min(MAX_SEARCH_RESULTS, 30))
                         all_searched_posts.extend(posts)
                         
                         # 恢复info_callback
@@ -616,18 +616,22 @@ class TreeholeRAGAgent:
                         
                         # Format search results for LLM
                         if posts:
-                            context_posts = smart_truncate_posts(posts[:10], max_comments=MAX_COMMENTS_PER_POST)
+                            # 增加token限制以包含更多帖子
+                            context_posts = smart_truncate_posts(posts[:30], max_comments=MAX_COMMENTS_PER_POST, max_tokens=8192)
                             context_text = format_posts_batch(context_posts, include_comments=True, max_comments=MAX_COMMENTS_PER_POST)
-                            result_summary = f"搜索到 {len(posts)} 个帖子。以下是部分内容：\n\n{context_text}"
+                            result_summary = f"搜索到 {len(posts)} 个帖子。以下是前 {len(context_posts)} 个：\n\n{context_text}"
                         else:
                             result_summary = f"未找到关于「{keyword}」的相关帖子。"
                         
                         # Add assistant's tool call and tool result to messages
-                        messages.append({
+                        # Note: omit 'content' key entirely when None (some API versions reject null)
+                        assistant_msg = {
                             "role": "assistant",
-                            "content": None,
                             "tool_calls": response["tool_calls"]
-                        })
+                        }
+                        if response.get("content"):
+                            assistant_msg["content"] = response["content"]
+                        messages.append(assistant_msg)
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tool_call["id"],
@@ -650,48 +654,24 @@ class TreeholeRAGAgent:
         unique_posts = {post["pid"]: post for post in all_searched_posts}.values()
         unique_posts = list(unique_posts)
         
-        msg = f"✓ 总共找到 {len(unique_posts)} 个不重复的帖子"
+        msg = f"✓ 总共找到 {len(unique_posts)} 个不重复的帖子，正在生成回答..."
         print(f"\n{AGENT_PREFIX}{msg}")
         if self.info_callback:
             self.info_callback(msg)
         
-        # Prepare context for final answer generation
-        if unique_posts:
-            context_posts = smart_truncate_posts(list(unique_posts)[:20], max_comments=MAX_COMMENTS_PER_POST)
-            context_text = format_posts_batch(context_posts, include_comments=True, max_comments=MAX_COMMENTS_PER_POST)
-        else:
-            context_text = "未找到相关内容。"
-        
-        # Generate final answer with streaming
+        # Generate final answer with streaming, reusing the existing conversation context.
+        # The messages list already contains all tool results (treehole posts), so we simply
+        # append a final user turn asking for the answer — no need to re-send the posts.
         print_separator("-")
         print("\n【最终回答】\n")
         
-        final_prompt = f"""基于以下树洞搜索结果，回答用户的问题。
-
-用户问题：{user_question}
-
-搜索历史：
-"""
-        for item in search_history:
-            final_prompt += f"{item['iteration']}. {item['keyword']}"
-            if item.get('reason'):
-                final_prompt += f" - {item['reason']}"
-            final_prompt += "\n"
+        messages.append({
+            "role": "user",
+            "content": "好的，你已经完成了所有搜索。请现在基于你已经检索到的所有树洞内容，用中文给出完整、有条理的回答。只使用已检索到的内容，不要编造信息；如果信息不足请诚实说明。"
+        })
         
-        final_prompt += f"\n树洞内容：\n{context_text}\n\n请基于以上内容回答用户问题。如果内容不足以回答，请诚实说明。"
-        
-        final_system_prompt = """你是北大树洞问答助手。请基于提供的树洞内容回答问题：
-- 只使用提供的内容，不要编造信息
-- 保持客观，综合多个观点
-- 如果信息不足，诚实说明
-- 回答要清晰、有条理"""
-        
-        # Use streaming call_deepseek for final answer
-        final_answer = self.call_deepseek(
-            user_message=final_prompt,
-            system_message=final_system_prompt,
-            stream=True
-        )
+        response = self._call_deepseek_with_tools(messages, tools=[], stream=True)
+        final_answer = response.get("content") or ""
         
         print("\n")
         print_separator("-")
@@ -699,8 +679,8 @@ class TreeholeRAGAgent:
         return {
             "answer": final_answer,
             "search_count": search_count,
-            "search_history": search_history,  # 搜索历史记录
-            "keywords": [],  # 智能检索模式下不预先提取关键词
+            "search_history": search_history,
+            "keywords": [],
             "sources": [{"pid": p.get("pid"), "text": p.get("text", "")[:100] + "..."} for p in unique_posts[:20]],
             "num_sources": len(unique_posts),
         }
@@ -712,7 +692,8 @@ class TreeholeRAGAgent:
         Args:
             messages: Conversation messages.
             tools: Available tools/functions.
-            stream: Whether to stream the response.
+            stream: Whether to stream the response. When True and no tool_calls,
+                    streams content via self.stream_callback and returns accumulated text.
             
         Returns:
             Response dict with content or tool_calls.
@@ -727,6 +708,7 @@ class TreeholeRAGAgent:
             "messages": messages,
             "temperature": TEMPERATURE,
             "max_tokens": MAX_RESPONSE_TOKENS,
+            "stream": stream,
         }
         
         if tools:
@@ -734,23 +716,72 @@ class TreeholeRAGAgent:
             data["tool_choice"] = "auto"
         
         try:
-            response = requests.post(
-                f"{self.api_base}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=120,
-            )
-            response.raise_for_status()
-            result = response.json()
+            if stream:
+                response = requests.post(
+                    f"{self.api_base}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=120,
+                    stream=True,
+                )
+                response.raise_for_status()
+                
+                full_content = ""
+                tool_calls_raw = None
+                
+                for line in response.iter_lines():
+                    if line:
+                        line_str = line.decode('utf-8')
+                        if line_str.startswith('data: '):
+                            data_str = line_str[6:]
+                            if data_str.strip() == '[DONE]':
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                                if 'choices' in chunk and len(chunk['choices']) > 0:
+                                    delta = chunk['choices'][0].get('delta', {})
+                                    # 流式 tool_calls 在第一个 chunk 里
+                                    if delta.get('tool_calls') and tool_calls_raw is None:
+                                        tool_calls_raw = delta['tool_calls']
+                                    content = delta.get('content', '')
+                                    if content:
+                                        if self.stream_callback:
+                                            self.stream_callback(content)
+                                        else:
+                                            print(content, end='', flush=True)
+                                        full_content += content
+                            except json.JSONDecodeError:
+                                continue
+                
+                if tool_calls_raw:
+                    return {"content": None, "tool_calls": tool_calls_raw}
+                return {"content": full_content, "tool_calls": None}
+            else:
+                response = requests.post(
+                    f"{self.api_base}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=120,
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                choice = result["choices"][0]
+                message = choice["message"]
+                
+                return {
+                    "content": message.get("content"),
+                    "tool_calls": message.get("tool_calls"),
+                }
             
-            choice = result["choices"][0]
-            message = choice["message"]
-            
-            return {
-                "content": message.get("content"),
-                "tool_calls": message.get("tool_calls"),
-            }
-            
+        except requests.exceptions.HTTPError as e:
+            error_detail = ""
+            try:
+                error_detail = e.response.json().get("error", {}).get("message", e.response.text)
+            except Exception:
+                error_detail = str(e)
+            print(f"{AGENT_PREFIX}错误: DeepSeek API 调用失败 - {error_detail}")
+            return {"content": None, "tool_calls": None}
         except Exception as e:
             print(f"{AGENT_PREFIX}错误: DeepSeek API 调用失败 - {e}")
             return {"content": None, "tool_calls": None}
