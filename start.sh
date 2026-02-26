@@ -90,6 +90,13 @@ MAX_SEARCH_RESULTS = 40
 # Maximum number of posts to include in context for LLM
 MAX_CONTEXT_POSTS = 30
 
+# Maximum number of comments to include per post (for mode 1 & 2)
+# Set to 0 to disable comments, -1 for unlimited
+MAX_COMMENTS_PER_POST = 5
+
+# Maximum number of search iterations in mode_auto_search (智能检索模式)
+MAX_SEARCH_ITERATIONS = 3
+
 # Temperature for LLM generation (0.0 - 1.0)
 # Lower = more focused, Higher = more creative
 TEMPERATURE = 0.7
