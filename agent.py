@@ -541,15 +541,15 @@ class TreeholeRAGAgent:
 
 工作流程：
 1. 分析用户问题，确定最核心的搜索关键词
-2. 调用 search_treehole，关键词最好控制在1-2个词
+2. 调用 search_treehole，关键词之间用空格连接
 3. 分析搜索结果，判断信息是否足够
 4. 如果信息不足，可以换用不同的关键词再次搜索
 5. 信息充足后，基于所有搜索结果回答用户问题
 
 注意事项：
-- 每次调用只搜索1-2个关键词
+- 每次调用只搜索1-2个关键词，且最好拆分为最基本的概念，例如"户外探索给分"拆分为"户外探索 给分"
 - 只基于搜索到的树洞内容回答，不要编造信息
-- 搜索次数建议不超过 {MAX_SEARCH_ITERATIONS} 次
+- 搜索次数建议不超过 {MAX_SEARCH_ITERATIONS/2} 次
 - 如果树洞内容不足以回答问题，诚实地告知用户
 - 保持客观，综合多个观点"""
             },
@@ -591,9 +591,16 @@ class TreeholeRAGAgent:
                             "reason": reason
                         })
                         
+                        # 临时禁用info_callback，避免search_treehole内部重复输出
+                        temp_callback = self.info_callback
+                        self.info_callback = None
+                        
                         # Perform search
                         posts = self.search_treehole(keyword, max_results=MAX_SEARCH_RESULTS // max_searches)
                         all_searched_posts.extend(posts)
+                        
+                        # 恢复info_callback
+                        self.info_callback = temp_callback
                         
                         # 合并搜索信息到一个消息
                         search_msg = f"[第{search_count}次搜索] 关键词: {keyword}"
