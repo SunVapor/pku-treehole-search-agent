@@ -73,19 +73,21 @@ class TreeholeRAGAgent:
     Supports manual and automatic keyword-based retrieval.
     """
 
-    def __init__(self, interactive=True):
+    def __init__(self, interactive=True, cookies_file=None):
         """Initialize the agent with Treehole client and DeepSeek API.
         
         Args:
             interactive (bool): Whether to allow interactive prompts for login verification.
                               Set to False when running as a service.
+            cookies_file (str): Path to user-specific cookies file. If None, uses default.
         """
-        self.client = TreeholeClient()
+        self.client = TreeholeClient(cookies_file=cookies_file)
         self.api_key = DEEPSEEK_API_KEY
         self.api_base = DEEPSEEK_API_BASE
         self.model = DEEPSEEK_MODEL
         self._all_comments_cache: Dict[int, List[Dict[str, Any]]] = {}
         self.stream_callback = None  # Optional callback for streaming output
+        self.info_callback = None  # Callback for progress/info messages
         
         # Ensure login
         if not self.client.ensure_login(USERNAME, PASSWORD, interactive=interactive):

@@ -10,17 +10,20 @@ import json
 import queue
 import threading
 import time
+import secrets
 from datetime import datetime
-from flask import Flask, render_template, request, Response, jsonify
+from flask import Flask, render_template, request, Response, jsonify, session
 from flask_cors import CORS
 
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from agent import TreeholeRAGAgent
+from client import TreeholeClient
 
 app = Flask(__name__)
-CORS(app)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
+CORS(app, supports_credentials=True)
 
 # 任务队列
 task_queue = queue.Queue()
@@ -28,27 +31,65 @@ task_queue = queue.Queue()
 active_connections = {}
 # 任务状态 {task_id: {"status": "pending/running/completed", "result": ...}}
 task_status = {}
+# 用户cookies存储目录
+USER_COOKIES_DIR = os.path.join(os.path.dirname(__file__), "user_cookies")
+os.makedirs(USER_COOKIES_DIR, exist_ok=True)
 
-# 初始化Agent
-agent = None
+# 初始化默认Agent（用于未登录用户）
+default_agent = None
 
-def init_agent():
-    """初始化Agent"""
-    global agent
+def init_default_agent():
+    """初始化默认Agent"""
+    global default_agent
     try:
-        agent = TreeholeRAGAgent(interactive=False)
-        print("[Web Server] Agent 初始化成功")
+        default_agent = TreeholeRAGAgent(interactive=False)
+        print("[Web Server] 默认Agent初始化成功")
         return True
     except Exception as e:
-        print(f"[Web Server] Agent 初始化失败: {e}")
+        print(f"[Web Server] 默认Agent初始化失败: {e}")
         return False
 
-def process_task(task_id, mode, params):
+def get_user_cookies_file(user_id):
+    """获取用户cookies文件路径"""
+    return os.path.join(USER_COOKIES_DIR, f"user_{user_id}.json")
+
+def create_user_agent(user_id):
+    """为特定用户创建Agent实例"""
+    try:
+        cookies_file = get_user_cookies_file(user_id)
+        agent = TreeholeRAGAgent(interactive=False, cookies_file=cookies_file)
+        print(f"[Web Server] 用户 {user_id} 的Agent创建成功")
+        return agent
+    except Exception as e:
+        print(f"[Web Server] 创建用户Agent失败: {e}")
+        return None
+
+def process_task(task_id, mode, params, user_id=None):
     """处理单个任务"""
     global task_status
     
     task_status[task_id]["status"] = "running"
     task_status[task_id]["start_time"] = datetime.now().isoformat()
+    
+    # 获取或创建Agent实例
+    if user_id:
+        agent = create_user_agent(user_id)
+        if not agent:
+            send_to_client(task_id, {
+                "type": "error",
+                "message": "创建用户Agent失败，请重新登录"
+            })
+            task_status[task_id]["status"] = "error"
+            return
+    else:
+        agent = default_agent
+        if not agent:
+            send_to_client(task_id, {
+                "type": "error",
+                "message": "服务未初始化"
+            })
+            task_status[task_id]["status"] = "error"
+            return
     
     # 创建流式输出回调
     def streaming_callback(content):
@@ -182,9 +223,10 @@ def worker_thread():
             task_id = task["task_id"]
             mode = task["mode"]
             params = task["params"]
+            user_id = task.get("user_id")
             
-            print(f"[Web Server] 开始处理任务 {task_id}, 模式 {mode}")
-            process_task(task_id, mode, params)
+            print(f"[Web Server] 开始处理任务 {task_id}, 模式 {mode}, 用户 {user_id or '未登录'}")
+            process_task(task_id, mode, params, user_id)
             print(f"[Web Server] 任务 {task_id} 处理完成")
             
             task_queue.task_done()
@@ -207,6 +249,9 @@ def submit_task():
     mode = data.get("mode", 2)
     params = data.get("params", {})
     
+    # 从session获取user_id（如果已登录）
+    user_id = session.get("user_id")
+    
     # 生成任务ID
     task_id = f"{int(time.time() * 1000)}_{threading.get_ident()}"
     
@@ -215,6 +260,7 @@ def submit_task():
         "task_id": task_id,
         "mode": mode,
         "params": params,
+        "user_id": user_id,
         "submit_time": datetime.now().isoformat()
     }
     
@@ -226,6 +272,7 @@ def submit_task():
         "status": "pending",
         "mode": mode,
         "params": params,
+        "user_id": user_id,
         "submit_time": task["submit_time"]
     }
     
@@ -291,15 +338,178 @@ def get_queue_status():
         "total_tasks": len(task_status)
     })
 
+@app.route('/api/login', methods=['POST'])
+def login():
+    """用户登录树洞"""
+    data = request.json
+    username = data.get("username")
+    password = data.get("password")
+    
+    if not username or not password:
+        return jsonify({
+            "success": False,
+            "message": "用户名和密码不能为空"
+        }), 400
+    
+    try:
+        # 生成用户ID（使用username作为唯一标识）
+        import hashlib
+        user_id = hashlib.md5(username.encode()).hexdigest()[:16]
+        
+        # 创建用户特定的cookies文件
+        cookies_file = get_user_cookies_file(user_id)
+        
+        # 创建临时client进行登录
+        client = TreeholeClient(cookies_file=cookies_file)
+        
+        # 尝试OAuth登录
+        result = client.oauth_login(username, password)
+        
+        if result.get("success") == "true" or result.get("success") == True:
+            # 登录成功，执行SSO登录获取token
+            token = result.get("token")
+            if token:
+                sso_response = client.sso_login(token)
+                # 保存cookies
+                client.save_cookies()
+                
+                # 设置session
+                session['user_id'] = user_id
+                session['username'] = username
+                session.permanent = True  # 使session持久化
+                
+                return jsonify({
+                    "success": True,
+                    "message": "登录成功",
+                    "username": username
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "message": "登录失败：未获取到token"
+                }), 401
+        else:
+            return jsonify({
+                "success": False,
+                "message": result.get("msg", "登录失败，请检查用户名和密码")
+            }), 401
+            
+    except Exception as e:
+        print(f"[Web Server] 登录错误: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"登录出错: {str(e)}"
+        }), 500
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    """用户登出"""
+    user_id = session.get('user_id')
+    if user_id:
+        # 可选：删除用户cookies文件
+        # cookies_file = get_user_cookies_file(user_id)
+        # if os.path.exists(cookies_file):
+        #     os.remove(cookies_file)
+        
+        session.clear()
+        return jsonify({
+            "success": True,
+            "message": "登出成功"
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "message": "未登录"
+        }), 400
+
+@app.route('/api/login_by_token', methods=['POST'])
+def login_by_token():
+    """使用Token直接登录"""
+    data = request.json
+    token = data.get("token")
+    
+    if not token:
+        return jsonify({
+            "success": False,
+            "message": "Token不能为空"
+        }), 400
+    
+    try:
+        # 生成用户ID（使用token的hash作为唯一标识）
+        import hashlib
+        user_id = hashlib.md5(token.encode()).hexdigest()[:16]
+        
+        # 创建用户特定的cookies文件
+        cookies_file = get_user_cookies_file(user_id)
+        
+        # 创建临时client
+        client = TreeholeClient(cookies_file=cookies_file)
+        
+        # 直接设置token到session和cookies
+        client.authorization = token
+        client.session.cookies.update({"pku_token": token})
+        client.session.headers.update({"authorization": f"Bearer {token}"})
+        
+        # 验证token是否有效（尝试获取未读消息）
+        try:
+            test_response = client.un_read()
+            if test_response.status_code != 200:
+                return jsonify({
+                    "success": False,
+                    "message": "Token无效或已过期"
+                }), 401
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "message": f"Token验证失败: {str(e)}"
+            }), 401
+        
+        # Token有效，保存cookies
+        client.save_cookies()
+        
+        # 设置session
+        session['user_id'] = user_id
+        session['username'] = f"Token用户({user_id})"
+        session.permanent = True  # 使session持久化
+        
+        return jsonify({
+            "success": True,
+            "message": "Token登录成功",
+            "username": session['username']
+        })
+            
+    except Exception as e:
+        print(f"[Web Server] Token登录错误: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"登录出错: {str(e)}"
+        }), 500
+
+@app.route('/api/check_login')
+def check_login():
+    """检查登录状态"""
+    user_id = session.get('user_id')
+    username = session.get('username')
+    
+    if user_id:
+        return jsonify({
+            "logged_in": True,
+            "username": username
+        })
+    else:
+        return jsonify({
+            "logged_in": False
+        })
+
 def main():
     """主函数"""
     print("=" * 60)
     print("PKU Treehole Search Agent - Web Server")
     print("=" * 60)
     
-    # 初始化Agent
-    if not init_agent():
-        print("[Web Server] Agent初始化失败，请检查配置")
+    # 初始化默认Agent
+    if not init_default_agent():
+        print("[Web Server] 默认Agent初始化失败，请检查配置")
         return
     
     # 启动工作线程

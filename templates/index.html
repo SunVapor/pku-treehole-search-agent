@@ -33,6 +33,7 @@
             color: white;
             padding: 30px;
             text-align: center;
+            position: relative;
         }
 
         .header h1 {
@@ -43,6 +44,211 @@
         .header p {
             opacity: 0.9;
             font-size: 14px;
+        }
+
+        .login-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .login-btn,
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .login-btn:hover,
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .username-display {
+            color: white;
+            font-size: 14px;
+            opacity: 0.95;
+        }
+
+        /* Modal样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .modal-input-group {
+            margin-bottom: 15px;
+        }
+
+        .modal-input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .modal-input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .modal-input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .modal-btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .modal-btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .modal-btn-secondary {
+            background: #e0e0e0;
+            color: #666;
+        }
+
+        .modal-btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .modal-error {
+            color: #f44336;
+            font-size: 13px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .login-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .login-tab {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.3s;
+        }
+        
+        .login-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+        
+        .login-tab:hover {
+            color: #667eea;
+        }
+        
+        .login-method {
+            display: none;
+        }
+        
+        .login-method.active {
+            display: block;
+        }
+        
+        .security-notice {
+            background: #e3f2fd;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #1976d2;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+            line-height: 1.4;
+        }
+        
+        .help-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .help-link:hover {
+            text-decoration: underline;
+        }
+        
+        .steps-list {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+            padding-left: 20px;
+            margin: 10px 0;
+        }
+        
+        .steps-list li {
+            margin: 8px 0;
         }
 
         .content {
@@ -346,8 +552,87 @@
 </head>
 
 <body>
+    <!-- 登录Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">登录北大树洞</div>
+            
+            <!-- 登录方式选择 -->
+            <div class="login-tabs">
+                <button class="login-tab active" onclick="switchLoginMethod('token')">🔐 Token登录</button>
+                <button class="login-tab" onclick="switchLoginMethod('password')">🔑 密码登录</button>
+            </div>
+            
+            <!-- Token登录方式 -->
+            <div id="tokenLogin" class="login-method active">
+                <div class="security-notice">
+                    ✅ 推荐使用此方式：您的密码不经过本服务器，更安全
+                </div>
+                
+                <div style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                    <strong>获取Token步骤：</strong>
+                    <ol class="steps-list">
+                        <li>点击打开 <a href="https://treehole.pku.edu.cn" target="_blank" class="help-link">树洞官网</a></li>
+                        <li>在官网使用IAAA账号登录</li>
+                        <li>登录后按F12打开开发者工具</li>
+                        <li>切换到"Application"（应用）标签</li>
+                        <li>左侧选择 Cookies → treehole.pku.edu.cn</li>
+                        <li>找到名为 <code>pku_token</code> 的Cookie，复制其值</li>
+                        <li>粘贴到下方输入框</li>
+                    </ol>
+                </div>
+                
+                <div class="modal-input-group">
+                    <label>PKU Token</label>
+                    <input type="text" id="loginToken" placeholder="粘贴从树洞官网获取的token">
+                    <div class="help-text">
+                        Token格式示例：eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    </div>
+                </div>
+                
+                <div class="modal-error" id="tokenLoginError"></div>
+                <div class="modal-buttons">
+                    <button class="modal-btn modal-btn-secondary" onclick="closeLoginModal()">取消</button>
+                    <button class="modal-btn modal-btn-primary" onclick="performTokenLogin()">使用Token登录</button>
+                </div>
+            </div>
+            
+            <!-- 密码登录方式 -->
+            <div id="passwordLogin" class="login-method">
+                <div class="security-notice">
+                    🔒 密码仅用于调用IAAA登录接口，不会被服务器保存
+                </div>
+                
+                <div class="modal-input-group">
+                    <label>学号</label>
+                    <input type="text" id="loginUsername" placeholder="请输入学号">
+                </div>
+                <div class="modal-input-group">
+                    <label>密码</label>
+                    <input type="password" id="loginPassword" placeholder="请输入密码">
+                    <div class="help-text">
+                        您的密码通过HTTPS加密传输，登录后立即丢弃
+                    </div>
+                </div>
+                
+                <div class="modal-error" id="passwordLoginError"></div>
+                <div class="modal-buttons">
+                    <button class="modal-btn modal-btn-secondary" onclick="closeLoginModal()">取消</button>
+                    <button class="modal-btn modal-btn-primary" onclick="performPasswordLogin()">登录</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <div class="header">
+            <!-- 登录状态显示 -->
+            <div class="login-status">
+                <span id="usernameDisplay" class="username-display" style="display: none;"></span>
+                <button id="loginBtn" class="login-btn" onclick="showLoginModal()">登录</button>
+                <button id="logoutBtn" class="logout-btn" onclick="performLogout()" style="display: none;">登出</button>
+            </div>
+            
             <h1>🌲 北大树洞检索 Agent</h1>
             <p>校园网内网服务 · 10.129.83.176:5000</p>
         </div>
@@ -420,6 +705,193 @@
     </div>
 
     <script>
+        // 登录相关函数
+        let isLoggedIn = false;
+        let username = '';
+        
+        // 页面加载时检查登录状态
+        window.addEventListener('DOMContentLoaded', async () => {
+            await checkLoginStatus();
+        });
+        
+        async function checkLoginStatus() {
+            try {
+                const response = await fetch('/api/check_login', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.logged_in) {
+                    isLoggedIn = true;
+                    username = data.username;
+                    updateLoginUI(true);
+                } else {
+                    isLoggedIn = false;
+                    updateLoginUI(false);
+                }
+            } catch (error) {
+                console.error('检查登录状态失败:', error);
+            }
+        }
+        
+        function updateLoginUI(loggedIn) {
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const usernameDisplay = document.getElementById('usernameDisplay');
+            
+            if (loggedIn) {
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'block';
+                usernameDisplay.style.display = 'block';
+                usernameDisplay.textContent = username;
+            } else {
+                loginBtn.style.display = 'block';
+                logoutBtn.style.display = 'none';
+                usernameDisplay.style.display = 'none';
+            }
+        }
+        
+        function showLoginModal() {
+            document.getElementById('loginModal').style.display = 'block';
+            // 重置到Token登录tab
+            switchLoginMethod('token');
+            // 清空所有输入
+            document.getElementById('loginToken').value = '';
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('tokenLoginError').style.display = 'none';
+            document.getElementById('passwordLoginError').style.display = 'none';
+        }
+        
+        function closeLoginModal() {
+            document.getElementById('loginModal').style.display = 'none';
+        }
+        
+        function switchLoginMethod(method) {
+            // 切换tab激活状态
+            const tabs = document.querySelectorAll('.login-tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // 切换内容显示
+            if (method === 'token') {
+                tabs[0].classList.add('active');
+                document.getElementById('tokenLogin').classList.add('active');
+                document.getElementById('passwordLogin').classList.remove('active');
+            } else {
+                tabs[1].classList.add('active');
+                document.getElementById('passwordLogin').classList.add('active');
+                document.getElementById('tokenLogin').classList.remove('active');
+            }
+        }
+        
+        async function performTokenLogin() {
+            const token = document.getElementById('loginToken').value.trim();
+            const errorDiv = document.getElementById('tokenLoginError');
+            
+            if (!token) {
+                errorDiv.textContent = '请输入Token';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/login_by_token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ token })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    isLoggedIn = true;
+                    username = data.username || 'Token用户';
+                    updateLoginUI(true);
+                    closeLoginModal();
+                    alert('Token登录成功！现在将使用您的个人账号检索树洞');
+                } else {
+                    errorDiv.textContent = data.message || 'Token登录失败';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = '登录出错: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+        
+        async function performPasswordLogin() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            const errorDiv = document.getElementById('passwordLoginError');
+            
+            if (!username || !password) {
+                errorDiv.textContent = '请填写学号和密码';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    isLoggedIn = true;
+                    window.username = data.username;
+                    updateLoginUI(true);
+                    closeLoginModal();
+                    alert('登录成功！现在将使用您的个人账号检索树洞');
+                } else {
+                    errorDiv.textContent = data.message || '登录失败';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = '登录出错: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+        
+        async function performLogout() {
+            if (!confirm('确定要登出吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    isLoggedIn = false;
+                    username = '';
+                    updateLoginUI(false);
+                    alert('登出成功');
+                } else {
+                    alert('登出失败');
+                }
+            } catch (error) {
+                alert('登出出错: ' + error.message);
+            }
+        }
+        
+        // 点击modal外部关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('loginModal');
+            if (event.target == modal) {
+                closeLoginModal();
+            }
+        }
+        
+        // 主程序逻辑
         let currentMode = 1;
         let currentTaskId = null;
         let eventSource = null;
