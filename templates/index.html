@@ -38,6 +38,7 @@
 
         .header h1 {
             font-size: 28px;
+            margin-top: 10px;
             margin-bottom: 10px;
         }
 
@@ -173,14 +174,14 @@
             margin-top: 10px;
             display: none;
         }
-        
+
         .login-tabs {
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
             border-bottom: 2px solid #e0e0e0;
         }
-        
+
         .login-tab {
             flex: 1;
             padding: 10px;
@@ -193,25 +194,25 @@
             margin-bottom: -2px;
             transition: all 0.3s;
         }
-        
+
         .login-tab.active {
             color: #667eea;
             border-bottom-color: #667eea;
             font-weight: 600;
         }
-        
+
         .login-tab:hover {
             color: #667eea;
         }
-        
+
         .login-method {
             display: none;
         }
-        
+
         .login-method.active {
             display: block;
         }
-        
+
         .security-notice {
             background: #e3f2fd;
             padding: 12px;
@@ -221,24 +222,24 @@
             margin-bottom: 15px;
             line-height: 1.5;
         }
-        
+
         .help-text {
             font-size: 12px;
             color: #999;
             margin-top: 5px;
             line-height: 1.4;
         }
-        
+
         .help-link {
             color: #667eea;
             text-decoration: none;
             font-weight: 500;
         }
-        
+
         .help-link:hover {
             text-decoration: underline;
         }
-        
+
         .steps-list {
             font-size: 13px;
             color: #666;
@@ -246,7 +247,7 @@
             padding-left: 20px;
             margin: 10px 0;
         }
-        
+
         .steps-list li {
             margin: 8px 0;
         }
@@ -457,8 +458,8 @@
         .message-answer h1,
         .message-answer h2,
         .message-answer h3 {
-            margin-top: 8px;
-            margin-bottom: 4px;
+            margin-top: 6px;
+            margin-bottom: 3px;
             font-weight: 600;
         }
 
@@ -482,7 +483,7 @@
 
         .message-answer li {
             margin: 1px 0;
-            line-height: 1.3;
+            line-height: 1.5;
         }
 
         .message-answer code {
@@ -514,8 +515,8 @@
         }
 
         .message-answer p {
-            margin: 3px 0;
-            line-height: 1.3;
+            margin: 2px 0;
+            line-height: 1.5;
         }
 
         .message-answer>*:first-child {
@@ -556,32 +557,32 @@
     <div id="loginModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">登录北大树洞</div>
-            
+
             <!-- 登录方式选择 -->
             <div class="login-tabs">
                 <button class="login-tab active" onclick="switchLoginMethod('token')">🔐 Token登录</button>
                 <button class="login-tab" onclick="switchLoginMethod('password')">🔑 密码登录</button>
             </div>
-            
+
             <!-- Token登录方式 -->
             <div id="tokenLogin" class="login-method active">
                 <div class="security-notice">
                     ✅ 推荐使用此方式：您的密码不经过本服务器，更安全
                 </div>
-                
+
                 <div style="font-size: 13px; color: #666; margin-bottom: 15px;">
                     <strong>获取Token步骤：</strong>
                     <ol class="steps-list">
                         <li>点击打开 <a href="https://treehole.pku.edu.cn" target="_blank" class="help-link">树洞官网</a></li>
                         <li>在官网使用IAAA账号登录</li>
                         <li>登录后按F12打开开发者工具</li>
-                        <li>切换到"Application"（应用）标签</li>
+                        <li>切换到“应用”或“存储”栏</li>
                         <li>左侧选择 Cookies → treehole.pku.edu.cn</li>
                         <li>找到名为 <code>pku_token</code> 的Cookie，复制其值</li>
                         <li>粘贴到下方输入框</li>
                     </ol>
                 </div>
-                
+
                 <div class="modal-input-group">
                     <label>PKU Token</label>
                     <input type="text" id="loginToken" placeholder="粘贴从树洞官网获取的token">
@@ -589,20 +590,20 @@
                         Token格式示例：eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
                     </div>
                 </div>
-                
+
                 <div class="modal-error" id="tokenLoginError"></div>
                 <div class="modal-buttons">
                     <button class="modal-btn modal-btn-secondary" onclick="closeLoginModal()">取消</button>
                     <button class="modal-btn modal-btn-primary" onclick="performTokenLogin()">使用Token登录</button>
                 </div>
             </div>
-            
+
             <!-- 密码登录方式 -->
             <div id="passwordLogin" class="login-method">
                 <div class="security-notice">
                     🔒 密码仅用于调用IAAA登录接口，不会被服务器保存
                 </div>
-                
+
                 <div class="modal-input-group">
                     <label>学号</label>
                     <input type="text" id="loginUsername" placeholder="请输入学号">
@@ -614,7 +615,7 @@
                         您的密码通过HTTPS加密传输，登录后立即丢弃
                     </div>
                 </div>
-                
+
                 <div class="modal-error" id="passwordLoginError"></div>
                 <div class="modal-buttons">
                     <button class="modal-btn modal-btn-secondary" onclick="closeLoginModal()">取消</button>
@@ -632,7 +633,7 @@
                 <button id="loginBtn" class="login-btn" onclick="showLoginModal()">登录</button>
                 <button id="logoutBtn" class="logout-btn" onclick="performLogout()" style="display: none;">登出</button>
             </div>
-            
+
             <h1>🌲 北大树洞检索 Agent</h1>
             <p>校园网内网服务 · 10.129.83.176:5000</p>
         </div>
@@ -708,19 +709,19 @@
         // 登录相关函数
         let isLoggedIn = false;
         let username = '';
-        
+
         // 页面加载时检查登录状态
         window.addEventListener('DOMContentLoaded', async () => {
             await checkLoginStatus();
         });
-        
+
         async function checkLoginStatus() {
             try {
                 const response = await fetch('/api/check_login', {
                     credentials: 'include'
                 });
                 const data = await response.json();
-                
+
                 if (data.logged_in) {
                     isLoggedIn = true;
                     username = data.username;
@@ -733,12 +734,12 @@
                 console.error('检查登录状态失败:', error);
             }
         }
-        
+
         function updateLoginUI(loggedIn) {
             const loginBtn = document.getElementById('loginBtn');
             const logoutBtn = document.getElementById('logoutBtn');
             const usernameDisplay = document.getElementById('usernameDisplay');
-            
+
             if (loggedIn) {
                 loginBtn.style.display = 'none';
                 logoutBtn.style.display = 'block';
@@ -750,7 +751,7 @@
                 usernameDisplay.style.display = 'none';
             }
         }
-        
+
         function showLoginModal() {
             document.getElementById('loginModal').style.display = 'block';
             // 重置到Token登录tab
@@ -762,16 +763,16 @@
             document.getElementById('tokenLoginError').style.display = 'none';
             document.getElementById('passwordLoginError').style.display = 'none';
         }
-        
+
         function closeLoginModal() {
             document.getElementById('loginModal').style.display = 'none';
         }
-        
+
         function switchLoginMethod(method) {
             // 切换tab激活状态
             const tabs = document.querySelectorAll('.login-tab');
             tabs.forEach(tab => tab.classList.remove('active'));
-            
+
             // 切换内容显示
             if (method === 'token') {
                 tabs[0].classList.add('active');
@@ -783,17 +784,17 @@
                 document.getElementById('tokenLogin').classList.remove('active');
             }
         }
-        
+
         async function performTokenLogin() {
             const token = document.getElementById('loginToken').value.trim();
             const errorDiv = document.getElementById('tokenLoginError');
-            
+
             if (!token) {
                 errorDiv.textContent = '请输入Token';
                 errorDiv.style.display = 'block';
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/login_by_token', {
                     method: 'POST',
@@ -801,9 +802,9 @@
                     credentials: 'include',
                     body: JSON.stringify({ token })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     isLoggedIn = true;
                     username = data.username || 'Token用户';
@@ -819,18 +820,18 @@
                 errorDiv.style.display = 'block';
             }
         }
-        
+
         async function performPasswordLogin() {
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
             const errorDiv = document.getElementById('passwordLoginError');
-            
+
             if (!username || !password) {
                 errorDiv.textContent = '请填写学号和密码';
                 errorDiv.style.display = 'block';
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/login', {
                     method: 'POST',
@@ -838,9 +839,9 @@
                     credentials: 'include',
                     body: JSON.stringify({ username, password })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     isLoggedIn = true;
                     window.username = data.username;
@@ -856,20 +857,20 @@
                 errorDiv.style.display = 'block';
             }
         }
-        
+
         async function performLogout() {
             if (!confirm('确定要登出吗？')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/logout', {
                     method: 'POST',
                     credentials: 'include'
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     isLoggedIn = false;
                     username = '';
@@ -882,15 +883,15 @@
                 alert('登出出错: ' + error.message);
             }
         }
-        
+
         // 点击modal外部关闭
-        window.onclick = function(event) {
+        window.onclick = function (event) {
             const modal = document.getElementById('loginModal');
             if (event.target == modal) {
                 closeLoginModal();
             }
         }
-        
+
         // 主程序逻辑
         let currentMode = 1;
         let currentTaskId = null;
@@ -918,7 +919,7 @@
                 showLoginModal();
                 return;
             }
-            
+
             const submitBtn = document.getElementById('submitBtn');
             const outputSection = document.getElementById('outputSection');
             const outputBox = document.getElementById('outputBox');
