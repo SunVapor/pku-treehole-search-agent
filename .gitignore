@@ -12,6 +12,7 @@ email_bot/email_config.py
 cookies.json
 *.cookies.json
 .treehole_cookies.json
+user_cookies/
 
 # Cache and data
 data/
@@ -21,6 +22,14 @@ data/
 
 # Logs
 logs/
+
+# Web Server (local deployment only, not in public repo)
+web_server.py
+templates/
+deploy_web_server.sh
+start_web_server.sh
+treehole-web-server.service
+WEB_SERVER_README.md
 
 # Virtual environment
 venv/
