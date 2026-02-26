@@ -591,19 +591,19 @@ class TreeholeRAGAgent:
                             "reason": reason
                         })
                         
-                        msg = f"[第{search_count}次搜索] 关键词: {keyword}"
-                        print(f"\n{AGENT_PREFIX}{msg}")
-                        if self.info_callback:
-                            self.info_callback(msg)
-                        if reason:
-                            reason_msg = f"搜索原因: {reason}"
-                            print(f"{AGENT_PREFIX}{reason_msg}")
-                            if self.info_callback:
-                                self.info_callback(reason_msg)
-                        
                         # Perform search
                         posts = self.search_treehole(keyword, max_results=MAX_SEARCH_RESULTS // max_searches)
                         all_searched_posts.extend(posts)
+                        
+                        # 合并搜索信息到一个消息
+                        search_msg = f"[第{search_count}次搜索] 关键词: {keyword}"
+                        if reason:
+                            search_msg += f"\n搜索原因: {reason}"
+                        search_msg += f"\n✓ 找到 {len(posts)} 个帖子"
+                        
+                        print(f"\n{AGENT_PREFIX}{search_msg}")
+                        if self.info_callback:
+                            self.info_callback(search_msg)
                         
                         # Format search results for LLM
                         if posts:

@@ -174,7 +174,7 @@
             padding: 20px;
             max-height: 500px;
             overflow-y: auto;
-            font-family: "SF Mono", Monaco, "Andale Mono", monospace;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             font-size: 13px;
             line-height: 1.6;
             white-space: pre-wrap;
@@ -242,39 +242,43 @@
         .loading {
             animation: pulse 1.5s infinite;
         }
-        
+
         /* Markdown渲染样式 */
         .message-answer {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
-        
-        .message-answer h1, .message-answer h2, .message-answer h3 {
-            margin-top: 20px;
-            margin-bottom: 10px;
+
+        .message-answer h1,
+        .message-answer h2,
+        .message-answer h3 {
+            margin-top: 16px;
+            margin-bottom: 8px;
             font-weight: 600;
         }
-        
+
         .message-answer h1 {
             font-size: 1.6em;
         }
-        
+
         .message-answer h2 {
             font-size: 1.4em;
         }
-        
+
         .message-answer h3 {
             font-size: 1.2em;
         }
-        
-        .message-answer ul, .message-answer ol {
-            margin: 10px 0;
+
+        .message-answer ul,
+        .message-answer ol {
+            margin: 8px 0;
             padding-left: 25px;
         }
-        
+
         .message-answer li {
-            margin: 5px 0;
+            margin: 3px 0;
+            line-height: 1.5;
         }
-        
+
         .message-answer code {
             background: #f0f0f0;
             padding: 2px 5px;
@@ -282,7 +286,7 @@
             font-family: monospace;
             font-size: 0.9em;
         }
-        
+
         .message-answer pre {
             background: #f5f5f5;
             padding: 10px;
@@ -290,24 +294,32 @@
             overflow-x: auto;
             max-width: 100%;
         }
-        
+
         .message-answer pre code {
             background: transparent;
             padding: 0;
         }
-        
+
         .message-answer blockquote {
             border-left: 4px solid #ddd;
             padding-left: 15px;
             margin: 10px 0;
             color: #666;
         }
-        
+
         .message-answer p {
-            margin: 10px 0;
-            line-height: 1.7;
+            margin: 8px 0;
+            line-height: 1.5;
         }
-        
+
+        .message-answer>*:first-child {
+            margin-top: 0;
+        }
+
+        .message-answer>*:last-child {
+            margin-bottom: 0;
+        }
+
         .message-answer table {
             border-collapse: collapse;
             width: 100%;
@@ -316,13 +328,14 @@
             overflow-x: auto;
             display: block;
         }
-        
-        .message-answer th, .message-answer td {
+
+        .message-answer th,
+        .message-answer td {
             border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
         }
-        
+
         .message-answer th {
             background-color: #f5f5f5;
             font-weight: 600;
@@ -563,7 +576,7 @@
 
         function appendStream(content) {
             streamBuffer += content;
-            
+
             // 如果还没有流式显示区域，创建一个
             if (!streamElement) {
                 const outputBox = document.getElementById('outputBox');
@@ -571,10 +584,10 @@
                 streamElement.className = 'message message-answer';
                 outputBox.appendChild(streamElement);
             }
-            
+
             // 使用marked.js将Markdown渲染为HTML
             streamElement.innerHTML = marked.parse(streamBuffer);
-            
+
             // 自动滚动到底部
             const outputBox = document.getElementById('outputBox');
             outputBox.scrollTop = outputBox.scrollHeight;
@@ -584,14 +597,14 @@
             const outputBox = document.getElementById('outputBox');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message message-${type}`;
-            
+
             // 如果是answer类型或者需要使用Markdown，就渲染Markdown
             if (useMarkdown && (type === 'answer' || type === 'search' || type === 'info')) {
                 messageDiv.innerHTML = marked.parse(text);
             } else {
                 messageDiv.textContent = text;
             }
-            
+
             outputBox.appendChild(messageDiv);
             outputBox.scrollTop = outputBox.scrollHeight;
         }
