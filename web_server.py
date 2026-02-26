@@ -39,6 +39,21 @@ def get_user_cookies_file(user_id):
     """获取用户cookies文件路径"""
     return os.path.join(USER_COOKIES_DIR, f"user_{user_id}.json")
 
+def verify_user_cookies(user_id):
+    """验证用户cookies是否仍然有效"""
+    try:
+        cookies_file = get_user_cookies_file(user_id)
+        if not os.path.exists(cookies_file):
+            return False
+        
+        # 创建临时client验证
+        client = TreeholeClient(cookies_file=cookies_file)
+        response = client.un_read()
+        return response.status_code == 200
+    except Exception as e:
+        print(f"[Web Server] 验证cookies失败: {e}")
+        return False
+
 def create_user_agent(user_id):
     """为特定用户创建Agent实例"""
     try:
@@ -48,6 +63,20 @@ def create_user_agent(user_id):
         return agent
     except Exception as e:
         print(f"[Web Server] 创建用户Agent失败: {e}")
+        return None
+
+def extract_token_from_cookies(cookies_file):
+    """从cookies文件中提取token"""
+    try:
+        if os.path.exists(cookies_file):
+            with open(cookies_file, 'r') as f:
+                cookies_data = json.load(f)
+                for cookie in cookies_data:
+                    if cookie.get('name') == 'pku_token':
+                        return cookie.get('value')
+        return None
+    except Exception as e:
+        print(f"[Web Server] 提取token失败: {e}")
         return None
 
 def process_task(task_id, mode, params, user_id=None):
@@ -345,15 +374,12 @@ def login():
         }), 400
     
     try:
-        # 生成用户ID（使用username作为唯一标识）
         import hashlib
-        user_id = hashlib.md5(username.encode()).hexdigest()[:16]
-        
-        # 创建用户特定的cookies文件
-        cookies_file = get_user_cookies_file(user_id)
+        # 先使用临时文件进行登录
+        temp_cookies_file = os.path.join(USER_COOKIES_DIR, f"temp_{int(time.time() * 1000)}.json")
         
         # 创建临时client进行登录
-        client = TreeholeClient(cookies_file=cookies_file)
+        client = TreeholeClient(cookies_file=temp_cookies_file)
         
         # 尝试OAuth登录
         result = client.oauth_login(username, password)
@@ -363,12 +389,27 @@ def login():
             token = result.get("token")
             if token:
                 sso_response = client.sso_login(token)
-                # 保存cookies
+                # 保存cookies到临时文件
                 client.save_cookies()
+                
+                # 从临时cookies文件中提取token，生成统一的user_id
+                actual_token = extract_token_from_cookies(temp_cookies_file)
+                if actual_token:
+                    user_id = hashlib.md5(actual_token.encode()).hexdigest()[:16]
+                else:
+                    # 降级方案：使用username生成
+                    user_id = hashlib.md5(username.encode()).hexdigest()[:16]
+                
+                # 将临时cookies文件移动到正式位置
+                final_cookies_file = get_user_cookies_file(user_id)
+                if os.path.exists(final_cookies_file):
+                    os.remove(final_cookies_file)
+                os.rename(temp_cookies_file, final_cookies_file)
                 
                 # 设置session
                 session['user_id'] = user_id
                 session['username'] = username
+                session['login_method'] = 'password'
                 session.permanent = True  # 使session持久化
                 
                 return jsonify({
@@ -377,11 +418,17 @@ def login():
                     "username": username
                 })
             else:
+                # 清理临时文件
+                if os.path.exists(temp_cookies_file):
+                    os.remove(temp_cookies_file)
                 return jsonify({
                     "success": False,
                     "message": "登录失败：未获取到token"
                 }), 401
         else:
+            # 清理临时文件
+            if os.path.exists(temp_cookies_file):
+                os.remove(temp_cookies_file)
             return jsonify({
                 "success": False,
                 "message": result.get("msg", "登录失败，请检查用户名和密码")
@@ -389,6 +436,9 @@ def login():
             
     except Exception as e:
         print(f"[Web Server] 登录错误: {e}")
+        # 清理可能的临时文件
+        if 'temp_cookies_file' in locals() and os.path.exists(temp_cookies_file):
+            os.remove(temp_cookies_file)
         return jsonify({
             "success": False,
             "message": f"登录出错: {str(e)}"
@@ -460,9 +510,10 @@ def login_by_token():
         # Token有效，保存cookies
         client.save_cookies()
         
-        # 设置session
+        # 设置session（显示用户友好的名称）
         session['user_id'] = user_id
-        session['username'] = f"Token用户({user_id})"
+        session['username'] = f"PKU用户"
+        session['login_method'] = 'token'
         session.permanent = True  # 使session持久化
         
         return jsonify({
@@ -480,15 +531,24 @@ def login_by_token():
 
 @app.route('/api/check_login')
 def check_login():
-    """检查登录状态"""
+    """检查登录状态并验证cookies有效性"""
     user_id = session.get('user_id')
     username = session.get('username')
     
     if user_id:
-        return jsonify({
-            "logged_in": True,
-            "username": username
-        })
+        # 验证cookies是否仍然有效
+        if verify_user_cookies(user_id):
+            return jsonify({
+                "logged_in": True,
+                "username": username
+            })
+        else:
+            # Cookies已失效，清除session
+            session.clear()
+            return jsonify({
+                "logged_in": False,
+                "message": "登录已过期，请重新登录"
+            })
     else:
         return jsonify({
             "logged_in": False
