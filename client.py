@@ -398,9 +398,22 @@ class TreeholeClient:
         # Need to login
         if username and password:
             print("Logging in...")
-            token = self.oauth_login(username, password)["token"]
-            self.sso_login(token)
-            response = self.un_read()
+            result = self.oauth_login(username, password)
+            
+            # Check if login was successful
+            if result.get("success") == "true" or result.get("success") == True:
+                token = result.get("token")
+                if not token:
+                    print(f"Login failed: No token returned")
+                    return False
+                    
+                self.sso_login(token)
+                response = self.un_read()
+            else:
+                # Login failed
+                error_msg = result.get("msg", "Unknown error")
+                print(f"Login failed: {error_msg}")
+                return False
             
             # Handle additional authentication if needed
             max_attempts = 5  # Prevent infinite loop
