@@ -157,9 +157,17 @@ class TreeholeRAGAgent:
                 if use_cache:
                     save_json(enriched_posts, cache_file)
                 
+                msg = f"✓ 找到 {len(enriched_posts)} 个帖子"
+                print(f"{AGENT_PREFIX}{msg}")
+                if self.info_callback:
+                    self.info_callback(msg)
+                
                 return enriched_posts
             else:
-                print(f"{AGENT_PREFIX}搜索失败: {search_result.get('message', '未知错误')}")
+                msg = f"搜索失败: {search_result.get('message', '未知错误')}"
+                print(f"{AGENT_PREFIX}{msg}")
+                if self.info_callback:
+                    self.info_callback(msg)
                 return []
                 
         except Exception as e:
@@ -432,11 +440,17 @@ class TreeholeRAGAgent:
                 "sources": [],
             }
         
-        print(f"{AGENT_PREFIX}✓ 找到 {len(posts)} 个帖子")
+        msg = f"✓ 找到 {len(posts)} 个帖子"
+        print(f"{AGENT_PREFIX}{msg}")
+        if self.info_callback:
+            self.info_callback(msg)
         
         # Step 2: Select top posts for context
         context_posts = smart_truncate_posts(posts[:MAX_CONTEXT_POSTS], max_comments=MAX_COMMENTS_PER_POST)
-        print(f"{AGENT_PREFIX}✓ 使用 {len(context_posts)} 个帖子作为上下文")
+        msg = f"✓ 使用 {len(context_posts)} 个帖子作为上下文"
+        print(f"{AGENT_PREFIX}{msg}")
+        if self.info_callback:
+            self.info_callback(msg)
         
         # Step 3: Display retrieved content
         print_separator("-")
@@ -550,7 +564,10 @@ class TreeholeRAGAgent:
         search_count = 0
         max_searches = MAX_SEARCH_ITERATIONS
         
-        print(f"{AGENT_PREFIX}✓ LLM 开始分析问题...")
+        msg = "✓ LLM 开始分析问题..."
+        print(f"{AGENT_PREFIX}{msg}")
+        if self.info_callback:
+            self.info_callback(msg)
         
         # Iterative search loop
         while search_count < max_searches:
@@ -574,9 +591,15 @@ class TreeholeRAGAgent:
                             "reason": reason
                         })
                         
-                        print(f"\n{AGENT_PREFIX}[第{search_count}次搜索] 关键词: {keyword}")
+                        msg = f"[第{search_count}次搜索] 关键词: {keyword}"
+                        print(f"\n{AGENT_PREFIX}{msg}")
+                        if self.info_callback:
+                            self.info_callback(msg)
                         if reason:
-                            print(f"{AGENT_PREFIX}搜索原因: {reason}")
+                            reason_msg = f"搜索原因: {reason}"
+                            print(f"{AGENT_PREFIX}{reason_msg}")
+                            if self.info_callback:
+                                self.info_callback(reason_msg)
                         
                         # Perform search
                         posts = self.search_treehole(keyword, max_results=MAX_SEARCH_RESULTS // max_searches)
@@ -603,7 +626,6 @@ class TreeholeRAGAgent:
                             "content": result_summary
                         })
                         
-                        print(f"{AGENT_PREFIX}✓ 搜索完成，找到 {len(posts)} 个帖子")
                         time.sleep(SEARCH_DELAY)
                 
                 # Continue the loop to let LLM decide next action
@@ -619,7 +641,10 @@ class TreeholeRAGAgent:
         unique_posts = {post["pid"]: post for post in all_searched_posts}.values()
         unique_posts = list(unique_posts)
         
-        print(f"\n{AGENT_PREFIX}✓ 总共找到 {len(unique_posts)} 个不重复的帖子")
+        msg = f"✓ 总共找到 {len(unique_posts)} 个不重复的帖子"
+        print(f"\n{AGENT_PREFIX}{msg}")
+        if self.info_callback:
+            self.info_callback(msg)
         
         # Prepare context for final answer generation
         if unique_posts:
@@ -736,7 +761,10 @@ class TreeholeRAGAgent:
 
         # Step 1: Construct search keyword
         search_keyword = self._build_course_search_keyword(course_abbr, teacher)
-        print(f"{AGENT_PREFIX}搜索关键词: {search_keyword}")
+        msg = f"搜索关键词: {search_keyword}"
+        print(f"{AGENT_PREFIX}{msg}")
+        if self.info_callback:
+            self.info_callback(msg)
 
         # Step 2: Search Treehole
         posts = self.search_treehole(search_keyword, max_results=MAX_SEARCH_RESULTS)
@@ -749,10 +777,16 @@ class TreeholeRAGAgent:
                 "sources": [],
             }
 
-        print(f"{AGENT_PREFIX}✓ 找到 {len(posts)} 个帖子")
+        msg = f"✓ 找到 {len(posts)} 个帖子"
+        print(f"{AGENT_PREFIX}{msg}")
+        if self.info_callback:
+            self.info_callback(msg)
 
         # Step 3: Extract reviews
-        print(f"{AGENT_PREFIX}✓ 正在从评论中提取课程测评...")
+        msg = "✓ 正在从评论中提取课程测评..."
+        print(f"{AGENT_PREFIX}{msg}")
+        if self.info_callback:
+            self.info_callback(msg)
         course_reviews = self._extract_course_reviews_from_posts(posts, course_abbr, teacher)
 
         if not course_reviews:
@@ -763,7 +797,10 @@ class TreeholeRAGAgent:
                 "sources": [{"pid": p.get("pid")} for p in posts[:5]],
             }
 
-        print(f"{AGENT_PREFIX}✓ 提取到 {len(course_reviews)} 条与课程相关的测评")
+        msg = f"✓ 提取到 {len(course_reviews)} 条与课程相关的测评"
+        print(f"{AGENT_PREFIX}{msg}")
+        if self.info_callback:
+            self.info_callback(msg)
 
         # Step 4: Display retrieved reviews
         print_separator("-")

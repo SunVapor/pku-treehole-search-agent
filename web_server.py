@@ -58,8 +58,17 @@ def process_task(task_id, mode, params):
             "content": content
         })
     
-    # 设置Agent的流式回调
+    # 创建进度信息回调
+    def info_callback(message):
+        """实时发送进度信息到客户端"""
+        send_to_client(task_id, {
+            "type": "info",
+            "message": message
+        })
+    
+    # 设置Agent的回调
     agent.stream_callback = streaming_callback
+    agent.info_callback = info_callback
     
     # 发送开始消息
     send_to_client(task_id, {
@@ -146,8 +155,9 @@ def process_task(task_id, mode, params):
         task_status[task_id]["error"] = str(e)
     
     finally:
-        # 清除流式回调
+        # 清除回调
         agent.stream_callback = None
+        agent.info_callback = None
         send_to_client(task_id, {
             "type": "complete",
             "message": "查询完成"
