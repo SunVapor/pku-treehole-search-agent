@@ -912,6 +912,13 @@
         }
 
         async function submitQuery() {
+            // 检查登录状态
+            if (!isLoggedIn) {
+                alert('请先登录后再进行查询！\n\n您可以选择：\n1. Token登录（推荐）- 更安全\n2. 密码登录 - 快速方便');
+                showLoginModal();
+                return;
+            }
+            
             const submitBtn = document.getElementById('submitBtn');
             const outputSection = document.getElementById('outputSection');
             const outputBox = document.getElementById('outputBox');

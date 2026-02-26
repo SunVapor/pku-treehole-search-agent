@@ -35,20 +35,6 @@ task_status = {}
 USER_COOKIES_DIR = os.path.join(os.path.dirname(__file__), "user_cookies")
 os.makedirs(USER_COOKIES_DIR, exist_ok=True)
 
-# 初始化默认Agent（用于未登录用户）
-default_agent = None
-
-def init_default_agent():
-    """初始化默认Agent"""
-    global default_agent
-    try:
-        default_agent = TreeholeRAGAgent(interactive=False)
-        print("[Web Server] 默认Agent初始化成功")
-        return True
-    except Exception as e:
-        print(f"[Web Server] 默认Agent初始化失败: {e}")
-        return False
-
 def get_user_cookies_file(user_id):
     """获取用户cookies文件路径"""
     return os.path.join(USER_COOKIES_DIR, f"user_{user_id}.json")
@@ -71,25 +57,24 @@ def process_task(task_id, mode, params, user_id=None):
     task_status[task_id]["status"] = "running"
     task_status[task_id]["start_time"] = datetime.now().isoformat()
     
-    # 获取或创建Agent实例
-    if user_id:
-        agent = create_user_agent(user_id)
-        if not agent:
-            send_to_client(task_id, {
-                "type": "error",
-                "message": "创建用户Agent失败，请重新登录"
-            })
-            task_status[task_id]["status"] = "error"
-            return
-    else:
-        agent = default_agent
-        if not agent:
-            send_to_client(task_id, {
-                "type": "error",
-                "message": "服务未初始化"
-            })
-            task_status[task_id]["status"] = "error"
-            return
+    # 必须有user_id才能处理任务
+    if not user_id:
+        send_to_client(task_id, {
+            "type": "error",
+            "message": "请先登录后再进行查询"
+        })
+        task_status[task_id]["status"] = "error"
+        return
+    
+    # 创建用户Agent实例
+    agent = create_user_agent(user_id)
+    if not agent:
+        send_to_client(task_id, {
+            "type": "error",
+            "message": "创建用户Agent失败，请重新登录"
+        })
+        task_status[task_id]["status"] = "error"
+        return
     
     # 创建流式输出回调
     def streaming_callback(content):
@@ -249,8 +234,16 @@ def submit_task():
     mode = data.get("mode", 2)
     params = data.get("params", {})
     
-    # 从session获取user_id（如果已登录）
+    # 从session获取user_id（必须已登录）
     user_id = session.get("user_id")
+    
+    # 检查是否登录
+    if not user_id:
+        return jsonify({
+            "success": False,
+            "message": "请先登录后再进行查询",
+            "require_login": True
+        }), 401
     
     # 生成任务ID
     task_id = f"{int(time.time() * 1000)}_{threading.get_ident()}"
@@ -506,11 +499,8 @@ def main():
     print("=" * 60)
     print("PKU Treehole Search Agent - Web Server")
     print("=" * 60)
-    
-    # 初始化默认Agent
-    if not init_default_agent():
-        print("[Web Server] 默认Agent初始化失败，请检查配置")
-        return
+    print("\n[Web Server] 注意：用户必须登录后才能使用检索功能")
+    print("[Web Server] 每个用户将使用自己的账号进行检索\n")
     
     # 启动工作线程
     worker = threading.Thread(target=worker_thread, daemon=True)
