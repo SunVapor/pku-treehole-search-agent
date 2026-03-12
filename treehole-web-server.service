@@ -1,0 +1,16 @@
+[Unit]
+Description=PKU Treehole Search Agent - Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/pku-treehole-search-agent
+ExecStart=/usr/bin/python3 /home/ubuntu/pku-treehole-search-agent/web_server.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/ubuntu/pku-treehole-search-agent/logs/web_server.log
+StandardError=append:/home/ubuntu/pku-treehole-search-agent/logs/web_server.error.log
+
+[Install]
+WantedBy=multi-user.target
