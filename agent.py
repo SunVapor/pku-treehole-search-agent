@@ -476,7 +476,7 @@ class TreeholeRAGAgent:
 2. 如果树洞内容不足以回答问题，诚实地告知用户
 3. 可以综合多个帖子的观点给出全面的回答
 4. 保持客观，如果有不同观点要都提及
-5. 回答要有条理，使用markdown格式时只能使用单级列表，不能出现多级列表"""
+5. 回答要有条理，使用markdown格式时只能使用单级列表，不能出现多级列表。注意不要出现空行！！！"""
 
         user_message = f"""树洞内容：
 
@@ -650,6 +650,11 @@ class TreeholeRAGAgent:
             # Max searches reached
             pass
         
+        msg = f"正在整理..."
+        print(f"\n{AGENT_PREFIX}{msg}")
+        if self.info_callback:
+            self.info_callback(msg)
+        
         # Deduplicate all searched posts
         unique_posts = {post["pid"]: post for post in all_searched_posts}.values()
         unique_posts = list(unique_posts)
@@ -667,7 +672,7 @@ class TreeholeRAGAgent:
         
         messages.append({
             "role": "user",
-            "content": "好的，你已经完成了所有搜索。请现在基于你已经检索到的所有树洞内容，用中文给出完整、有条理的回答。只使用已检索到的内容，不要编造信息；如果信息不足请诚实说明。"
+            "content": "好的，你已经完成了所有搜索。请现在基于你已经检索到的所有树洞内容，用中文给出完整、有条理的回答。只使用已检索到的内容，不要编造信息；如果信息不足请诚实说明。注意不要出现空行！！！"
         })
         
         response = self._call_deepseek_with_tools(messages, tools=[], stream=True)
@@ -877,7 +882,7 @@ class TreeholeRAGAgent:
 要点：
 - 客观呈现不同观点，包括正面和负面评价
 - 如果评价有分歧，要明确指出并分析原因
-- 使用markdown格式时只能使用单级列表，不能出现多级列表
+- 使用markdown格式时只能使用单级列表，不能出现多级列表。注意不要出现空行！！！
 - 引用具体评论时要注明
 """
 
@@ -1014,7 +1019,7 @@ class TreeholeRAGAgent:
 3. 如果数据不均衡（某位老师测评少），要提示结论置信度。
 4. 最后给出按学生偏好分类的选课建议（如：追求高分、重视学习收获、时间有限）。
 5. 引用具体评论时注明老师和帖子编号。
-6. 使用markdown格式时只能使用单级列表，不能出现多级列表。
+6. 使用markdown格式，只能使用单级列表，不能出现多级列表。注意不要出现空行！！！
 """
 
         user_message = f"""以下是北大树洞中同一门课程「{course_abbr}」不同老师的测评内容（已按老师分组）：

@@ -23,13 +23,10 @@ data/
 # Logs
 logs/
 
-# Web Server (local deployment only, not in public repo)
-web_server.py
-templates/
+# Deployment scripts (contains server-specific info)
 deploy_web_server.sh
 start_web_server.sh
 treehole-web-server.service
-WEB_SERVER_README.md
 
 # Virtual environment
 venv/

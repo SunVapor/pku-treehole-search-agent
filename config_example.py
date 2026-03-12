@@ -1,18 +1,19 @@
 """
-Configuration file for PKU Treehole RAG Agent.
+配置文件示例 - 请复制此文件为 config_private.py 并填入真实值
 
-Copy this file to config_private.py and fill in your credentials.
-config_private.py is gitignored for security.
+使用方法：
+    cp config_example.py config_private.py
+    # 然后编辑 config_private.py，填入你的真实配置
 """
 
 # ==================== Treehole Credentials ====================
 # Your PKU credentials for Treehole login
-USERNAME = "2xx00xxxxx"  # Replace with your student ID
-PASSWORD = "xxxxxx"      # Replace with your password
+USERNAME = "<USERNAME>"
+PASSWORD = "<PASSWORD>"
 
 # ==================== DeepSeek API Configuration ====================
 # Get your API key from: https://platform.deepseek.com/
-DEEPSEEK_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+DEEPSEEK_API_KEY = "<DEEPSEEK_API_KEY>"
 DEEPSEEK_API_BASE = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"  # or "deepseek-reasoner"
 
@@ -28,7 +29,7 @@ MAX_CONTEXT_POSTS = 30
 MAX_COMMENTS_PER_POST = 5
 
 # Maximum number of search iterations in mode_auto_search (智能检索模式)
-MAX_SEARCH_ITERATIONS = 3
+MAX_SEARCH_ITERATIONS = 5
 
 # Temperature for LLM generation (0.0 - 1.0)
 # Lower = more focused, Higher = more creative

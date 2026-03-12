@@ -1,10 +1,13 @@
 # PKU Treehole Search Agent
 
-基于北大树洞的 RAG（检索增强生成）智能问答系统，支持选课咨询、课程测评分析等功能。
+基于北大树洞的智能检索系统，支持选课咨询、课程测评分析等功能。
 
-**🆕 新功能：邮件机器人** - 通过邮件远程查询，随时随地获取课程信息！
+已部署在Clab服务器上，可通过**校园网内访问**:
+```
+http://10.129.83.176:5000
+```
 
-## ⚡ 快速开始
+## 快速开始
 
 ### 方式 1: 命令行交互
 
@@ -14,9 +17,9 @@ cd ./pku-treehole-search-agent
 bash start.sh
 ```
 
-### 方式 2: 邮件机器人 🆕
+### 方式 2: 邮件机器人 
 
-通过邮件远程查询，无需登录服务器！
+通过邮件远程查询，无需登录服务器。
 
 ```bash
 cd ~/pku-treehole-search-agent/email_bot
@@ -32,7 +35,7 @@ bash start_email_bot.sh
 sudo bash deploy_service.sh
 ```
 
-发送邮件到配置的邮箱，主题包含 `树洞` 即可自动回复！
+发送邮件到配置的邮箱，主题包含 `树洞` 即可自动回复。
 
 详见 [email_bot/README.md](email_bot/README.md)
 
@@ -60,7 +63,7 @@ sudo bash deploy_service.sh
    python3 agent.py
    ```
 
-## 🎯 功能特性
+## 功能特性
 
 ### 三种智能模式
 
@@ -68,38 +71,37 @@ sudo bash deploy_service.sh
 - 用户提供关键词 + 问题
 - 适合明确知道要搜什么的场景
 
-#### 模式 2: 智能自动检索 🆕⭐
+#### 模式 2: 智能自动检索 
 - **只需输入自然语言问题**
 - **LLM 自主决策搜索策略**
-- **支持多轮迭代搜索（最多 3 次）**
+- **支持多轮迭代搜索**
 - **工作流程**：
   1. LLM 分析问题并决定搜索关键词
   2. 执行搜索并分析结果
   3. 如信息不足，LLM 可再次搜索（换用不同关键词）
   4. 迭代直至获取充分信息
   5. 综合所有搜索结果给出最终回答
-- **类似 MCP 工具调用模式**：LLM 像使用工具一样调用搜索功能
 
-#### 模式 3: 课程测评分析 ⭐
+#### 模式 3: 课程测评分析 
 专门为选课设计的深度分析模式：
-- **输入**: 课程缩写 + 老师首字母（如：`计网` + `hq`）
-- **多老师横向对比**: 老师输入支持多个（如：`hq,zhx,yyx` 或 `hq zhx yyx`）
+- **输入**: 课程缩写 + 老师首字母（如：`ics` + `ljl`）
+- **多老师横向对比**: 老师输入支持多个
 - **智能爬取**: 自动获取帖子的所有评论
 - **智能筛选**: 优先洞主评论，筛选包含课程名的内容
 - **多维分析**: 课程难度、教学质量、考核方式、选课建议等
 
 ### 核心特性
 
-- ✅ 流式输出（实时显示 AI 回答）
-- ✅ 检索内容预览（先看数据源，再看分析）
-- ✅ 搜索结果缓存（避免重复请求）
-- ✅ Cookie 持久化（免重复登录）
-- ✅ 智能 Token 优化
+- 流式输出（实时显示 AI 回答）
+- 检索内容预览（先看数据源，再看分析）
+- 搜索结果缓存（避免重复请求）
+- Cookie 持久化（免重复登录）
+- 智能 Token 优化
 
 
-## ⚙️ 配置说明
+## 配置说明
 
-常用配置参数（在 `config_private.py` 中修改）：
+常用配置参数（复制 `config_example.py` 更名为 `config_private.py` 并在其中修改）：
 
 ```python
 # 搜索配置
@@ -117,24 +119,6 @@ ENABLE_CACHE = True           # 是否启用缓存
 CACHE_EXPIRATION = 86400      # 缓存过期时间（秒）
 ```
 
-## 📁 项目结构
-
-```
-pku-treehole-search-agent/
-├── README.md              # 项目文档
-├── start.sh               # 一键启动脚本
-├── config.py              # 配置模板
-├── config_private.py      # 私有配置（自动创建）
-├── client.py              # 树洞 API 客户端
-├── agent.py               # RAG Agent 主逻辑
-├── utils.py               # 工具函数
-├── email_bot/             # 邮件机器人 🆕
-│   ├── README.md          # 邮件机器人文档
-│   ├── bot_email.py       # 邮件机器人主程序
-│   ├── email_config_template.py  # 配置模板
-│   └── ...                # 其他脚本和配置
-└── data/cache/            # 搜索结果缓存
-```
 
 ## 🔧 API 实现细节
 
@@ -180,7 +164,7 @@ pku-treehole-search-agent/
 - 跨项目目录共享（主程序和邮件机器人共用）
 - 自动加载和保存，避免频繁登录
 
-#### 非交互模式 🆕
+#### 非交互模式 
 ```python
 # 后台服务部署时使用非交互模式
 agent = TreeholeRAGAgent(interactive=False)
@@ -272,7 +256,7 @@ tail -f ~/pku-treehole-search-agent/logs/bot.log
 - **Failed to login**: 检查 `config_private.py` 中的账号密码
 - **IMAP/SMTP error**: 检查 `email_config.py` 中的邮箱授权码
 
-## 💡 注意事项
+## 注意事项
 
 1. **隐私安全**
    - `config_private.py` 已加入 `.gitignore`

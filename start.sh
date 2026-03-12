@@ -68,7 +68,7 @@ if [ ! -f "config_private.py" ]; then
     echo "正在创建 config_private.py..."
     cat > config_private.py << EOF
 """
-Private configuration file for PKU Treehole RAG Agent.
+Private configuration file for PKU Treehole Search Agent.
 This file is gitignored for security.
 """
 
@@ -95,7 +95,7 @@ MAX_CONTEXT_POSTS = 30
 MAX_COMMENTS_PER_POST = 5
 
 # Maximum number of search iterations in mode_auto_search (智能检索模式)
-MAX_SEARCH_ITERATIONS = 3
+MAX_SEARCH_ITERATIONS = 5
 
 # Temperature for LLM generation (0.0 - 1.0)
 # Lower = more focused, Higher = more creative
