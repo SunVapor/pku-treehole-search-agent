@@ -3,6 +3,15 @@
 
 echo "正在部署 PKU Treehole Web Server 服务..."
 
+# 安装 Web 服务依赖（若已安装会自动跳过）
+echo "安装 Web 服务依赖..."
+sudo apt-get update -y
+sudo apt-get install -y python3-flask python3-flask-cors
+
+# 确保日志目录存在，避免 systemd 因 StandardOutput 路径不存在而启动失败
+mkdir -p logs
+sudo chown ubuntu:ubuntu logs
+
 # 复制服务文件
 sudo cp treehole-web-server.service /etc/systemd/system/
 
